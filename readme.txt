@@ -37,10 +37,10 @@ El código del proyecto incluye las siguientes características:
 
 Para más detalles sobre el código, consulta los archivos en el repositorio.
 
+## Ejemplo de Cuerpo de Petición
 
-
-
-el cuerpo de la peticion para registro y login es este 
+El cuerpo de la petición para registro y login es el siguiente:
+```json
 {
     "email": "usuario@example.com",
     "password": "passwordSeguro123",
@@ -49,3 +49,4 @@ el cuerpo de la peticion para registro y login es este
     "nif": "12345678A",
     "direccion": "Calle Falsa 123, Ciudad, País"
 }
+```
