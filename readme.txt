@@ -36,3 +36,16 @@ El código del proyecto incluye las siguientes características:
 - **Rutas protegidas**: Solo accesibles si el usuario ha iniciado sesión correctamente.
 
 Para más detalles sobre el código, consulta los archivos en el repositorio.
+
+
+
+
+el cuerpo de la peticion para registro y login es este 
+{
+    "email": "usuario@example.com",
+    "password": "passwordSeguro123",
+    "nombre": "Juan",
+    "apellidos": "Pérez García",
+    "nif": "12345678A",
+    "direccion": "Calle Falsa 123, Ciudad, País"
+}

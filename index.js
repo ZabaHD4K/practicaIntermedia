@@ -27,11 +27,11 @@ app.post('/login', (req, res) => {
 });
 
 app.post('/register',  async (req, res) => { // async para poder usar await
-    const { email, password } = req.body;
+    const { email, password, nombre, apellidos, nif, direccion } = req.body;
     console.log(req.body);
 
     try {
-        const id = await UserRepository.create({ email, password }); // usamos await para esperar a el hash
+        const id = await UserRepository.create({ email, password, nombre, apellidos, nif, direccion }); // usamos await para esperar a el hash
         res.send({ id });
     } catch (error) {
         res.status(400).send({ error: error.message });
@@ -45,20 +45,11 @@ app.post('/logout', (req, res) => {
 
 import path from 'path';
 
-
 //vista de usuarios, esta protegida, sin token no se puede entrar
 app.get('/protected', verifyToken, (req, res) => {
     const filePath = path.resolve('db/User.json');
     res.sendFile(filePath);
 });
-
-
-
-
-
-
-
-
 
 // Middleware para verificar el token
 function verifyToken(req, res, next) {
@@ -75,10 +66,6 @@ function verifyToken(req, res, next) {
         next();
     });
 }
-
-
-
-
 
 app.listen(3000, () => {
     console.log('Server is running on port 3000');

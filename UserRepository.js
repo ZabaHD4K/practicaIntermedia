@@ -16,11 +16,27 @@ const User = Schema('User', {
     password: {
         type: String,
         required: true
+    },
+    nombre: {
+        type: String,
+        required: true
+    },
+    apellidos: {
+        type: String,
+        required: true
+    },
+    nif: {
+        type: String,
+        required: true
+    },
+    direccion: {
+        type: String,
+        required: true
     }
 });
 
 class UserRepository {
-    static async create({ email, password }) {
+    static async create({ email, password, nombre, apellidos, nif, direccion }) {
         Validation.email(email);
         Validation.password(password);
 
@@ -38,7 +54,11 @@ class UserRepository {
         User.create({
             _id: id,
             email,
-            password: hashedpassword // guardamos la contraseña encriptada
+            password: hashedpassword, // guardamos la contraseña encriptada
+            nombre,
+            apellidos,
+            nif,
+            direccion
         }).save();
 
         return id;
