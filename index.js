@@ -1,7 +1,10 @@
 import express from 'express';
 import UserRepository from './UserRepository.js';
 import jwt from 'jsonwebtoken';
-import cookieParser from 'cookie-parser'; // Importa cookie-parser
+import cookieParser from 'cookie-parser';
+import { createCompany } from './CompanyRepository.js';
+import path from 'path';
+
 const app = express();
 
 app.set('view engine', 'ejs'); // motor de plantillas
@@ -43,8 +46,6 @@ app.post('/logout', (req, res) => {
     res.send('logout de usuarios');
 });
 
-import path from 'path';
-
 //vista de usuarios, esta protegida, sin token no se puede entrar
 app.get('/protected', verifyToken, (req, res) => {
     const filePath = path.resolve('db/User.json');
@@ -66,6 +67,18 @@ function verifyToken(req, res, next) {
         next();
     });
 }
+
+// Compañía
+app.post('/companies/create', (req, res) => {
+    const { emailJefe, nif, nombre, miembros } = req.body;
+
+    try {
+        const newCompany = createCompany(emailJefe, nif, nombre, miembros);
+        res.status(201).json(newCompany);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
 
 app.listen(3000, () => {
     console.log('Server is running on port 3000');

@@ -1,0 +1,20 @@
+[
+  {
+    "_id": "ba544a15-a8cc-43dd-868b-a2ac15c11caa",
+    "nif": "B12345678",
+    "nombre": "Compañía del Nuevo Jefe",
+    "miembros": [
+      "nuevojefe@example.com"
+    ],
+    "jefe": "nuevojefe@example.com"
+  },
+  {
+    "_id": "54373cdb-bc6c-43c2-a2fc-81f54dffb77e",
+    "nif": "12345678A",
+    "nombre": "Nombre de la Compañía",
+    "miembros": [
+      "usuario@example.com"
+    ],
+    "jefe": "nuevojefe@example.com"
+  }
+]
