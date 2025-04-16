@@ -31,6 +31,38 @@ app.get('/', (req, res) => {
    res.send('inicio');
 });
 
+// Ruta para la página de cambio de contraseña (protegida)
+app.get('/change-password', verifyToken, (req, res) => {
+   res.render('change-password');
+});
+
+// Ruta para la página de login
+app.get('/login-page', (req, res) => {
+   res.render('index');
+});
+
+// Ruta para la página de logout/panel de usuario (protegida)
+app.get('/user-panel', verifyToken, (req, res) => {
+   res.render('logout');
+});
+
+// Endpoint para obtener información del usuario actual (protegido)
+app.get('/api/user/info', verifyToken, async (req, res) => {
+   try {
+      const user = await User.findById(req.user.id, { 
+         password: 0, 
+         validationCode: 0, 
+         validationCodeExpires: 0 
+      });
+      if (!user) {
+         return res.status(404).send({ error: 'Usuario no encontrado' });
+      }
+      res.json(user);
+   } catch (error) {
+      res.status(500).send({ error: 'Error al obtener información del usuario' });
+   }
+});
+
 // Usuarios
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -105,9 +137,34 @@ app.post('/api/user/resend-code', async (req, res) => {
     }
 });
 
+// Nuevo endpoint para cambiar la contraseña - Requiere autenticación
+app.post('/api/user/change-password', verifyToken, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+        return res.status(400).send({ 
+            error: 'Se requiere la contraseña actual y la nueva contraseña' 
+        });
+    }
+    
+    try {
+        const result = await UserRepository.changePassword({ 
+            userId: req.user.id, 
+            currentPassword, 
+            newPassword 
+        });
+        res.status(200).send(result);
+    } catch (error) {
+        res.status(400).send({ error: error.message });
+    }
+});
+
 app.post('/logout', (req, res) => {
-    res.clearCookie('token');
-    res.send('logout de usuarios');
+    res.clearCookie('token', { 
+        httpOnly: true,
+        path: '/'
+    });
+    res.status(200).json({ message: 'Sesión cerrada correctamente' });
 });
 
 app.get('/protected', verifyToken, async (req, res) => {

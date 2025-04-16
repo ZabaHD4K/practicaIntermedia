@@ -112,6 +112,34 @@ class UserRepository {
     
     return { success: true, validationCode };
   }
+  
+  static async changePassword({ userId, currentPassword, newPassword }) {
+    // Validar la nueva contraseña
+    Validation.password(newPassword);
+    
+    // Buscar el usuario por ID
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error('Usuario no encontrado');
+    }
+    
+    // Verificar que la contraseña actual es correcta
+    const isValidPassword = await user.comparePassword(currentPassword);
+    if (!isValidPassword) {
+      throw new Error('La contraseña actual es incorrecta');
+    }
+    
+    // Verificar que la nueva contraseña no es igual a la actual
+    if (currentPassword === newPassword) {
+      throw new Error('La nueva contraseña debe ser diferente a la actual');
+    }
+    
+    // Actualizar la contraseña
+    user.password = newPassword;
+    await user.save();
+    
+    return { success: true, message: 'Contraseña actualizada correctamente' };
+  }
 }
 
 class Validation {
