@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 import dotenv from 'dotenv';
+import User from './models/User.js';
 
 // Configurar las variables de entorno
 dotenv.config();
@@ -30,16 +31,20 @@ app.get('/', (req, res) => {
    res.send('inicio');
 });
 
-// usuarios
+// Usuarios
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const user = await UserRepository.login({ email, password });
-        const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET || "SECRET_KEY", { expiresIn: '1h' });
+        const token = jwt.sign(
+            { id: user._id, email: user.email }, 
+            process.env.JWT_SECRET || "SECRET_KEY", 
+            { expiresIn: '1h' }
+        );
         res.cookie('token', token, { httpOnly: true });
         res.send({ user, token });
     } catch (error) {
-        res.status(401).send({ error: "usuario o contraseña incorrectos" });
+        res.status(401).send({ error: error.message });
     }
 });
 
@@ -48,8 +53,53 @@ app.post('/register', async (req, res) => {
     console.log(req.body);
 
     try {
-        const id = await UserRepository.create({ email, password, nombre, apellidos, nif, direccion });
-        res.send({ id });
+        const result = await UserRepository.create({ 
+            email, password, nombre, apellidos, nif, direccion 
+        });
+        
+        // En un sistema real, aquí enviarías el código por email
+        // Por ahora, solo devolvemos el código en la respuesta para pruebas
+        res.status(201).send({ 
+            id: result.id,
+            message: 'Usuario registrado. Por favor valida tu cuenta con el código enviado a tu email.',
+            validationCode: result.validationCode // En producción, no enviarías esto en la respuesta
+        });
+    } catch (error) {
+        res.status(400).send({ error: error.message });
+    }
+});
+
+app.put('/api/user/validation', async (req, res) => {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+        return res.status(400).send({ 
+            error: 'Se requiere email y código de validación' 
+        });
+    }
+    
+    try {
+        const result = await UserRepository.validateUser({ email, code });
+        res.status(200).send(result);
+    } catch (error) {
+        res.status(400).send({ error: error.message });
+    }
+});
+
+app.post('/api/user/resend-code', async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).send({ error: 'Se requiere email' });
+    }
+    
+    try {
+        const result = await UserRepository.resendValidationCode(email);
+        // En un sistema real, aquí enviarías el código por email
+        res.status(200).send({ 
+            message: 'Código de validación reenviado',
+            validationCode: result.validationCode // En producción, no enviarías esto en la respuesta
+        });
     } catch (error) {
         res.status(400).send({ error: error.message });
     }
@@ -62,7 +112,11 @@ app.post('/logout', (req, res) => {
 
 app.get('/protected', verifyToken, async (req, res) => {
     try {
-        const users = await User.find({}, { password: 0 }); // Excluir las contraseñas
+        const users = await User.find({}, { 
+            password: 0, 
+            validationCode: 0, 
+            validationCodeExpires: 0 
+        });
         res.json(users);
     } catch (error) {
         res.status(500).send({ error: 'Error al obtener los usuarios' });

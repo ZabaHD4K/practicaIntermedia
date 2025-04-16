@@ -68,6 +68,9 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
 - apellidos
 - nif
 - direccion
+- isValidated (indica si la cuenta está validada)
+- validationCode (código de 6 dígitos para validar la cuenta)
+- validationCodeExpires (fecha de expiración del código)
 
 #### Compañía
 - nif (único)
@@ -91,7 +94,7 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
 ### **2. Login**
 - **Ruta:** /login
 - **Método:** POST
-- **Descripción:** Permite a un usuario iniciar sesión.
+- **Descripción:** Permite a un usuario iniciar sesión. La cuenta debe estar validada.
 - **Cuerpo de la solicitud (JSON):**
   ```json
   {
@@ -108,7 +111,8 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
       "nombre": "Nombre",
       "apellidos": "Apellidos",
       "nif": "12345678A",
-      "direccion": "Dirección"
+      "direccion": "Dirección",
+      "isValidated": true
     },
     "token": "jwt_token_generado"
   }
@@ -119,13 +123,19 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
     "error": "usuario o contraseña incorrectos"
   }
   ```
+  o
+  ```json
+  {
+    "error": "La cuenta no ha sido validada. Por favor, valida tu cuenta."
+  }
+  ```
 
 ---
 
 ### **3. Registro**
 - **Ruta:** /register
 - **Método:** POST
-- **Descripción:** Permite registrar un nuevo usuario.
+- **Descripción:** Permite registrar un nuevo usuario. Se genera un código de validación que debe ser usado para activar la cuenta.
 - **Cuerpo de la solicitud (JSON):**
   ```json
   {
@@ -137,10 +147,12 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
     "direccion": "Calle Falsa 123, Ciudad, País"
   }
   ```
-- **Respuesta exitosa (200):**
+- **Respuesta exitosa (201):**
   ```json
   {
-    "id": "id_del_usuario_creado"
+    "id": "id_del_usuario_creado",
+    "message": "Usuario registrado. Por favor valida tu cuenta con el código enviado a tu email.",
+    "validationCode": "123456" // Solo para pruebas, en producción esto se enviaría por email
   }
   ```
 - **Errores (400):**
@@ -192,10 +204,63 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
 
 ---
 
-### **6. Crear Compañía**
+### **6. Validar Usuario**
+- **Ruta:** /api/user/validation
+- **Método:** PUT
+- **Descripción:** Valida la cuenta de un usuario utilizando el código de 6 dígitos.
+- **Cuerpo de la solicitud (JSON):**
+  ```json
+  {
+    "email": "usuario@example.com",
+    "code": "123456"
+  }
+  ```
+- **Respuesta exitosa (200):**
+  ```json
+  {
+    "success": true,
+    "message": "Usuario validado correctamente"
+  }
+  ```
+- **Errores (400):**
+  ```json
+  {
+    "error": "Código de validación inválido o expirado"
+  }
+  ```
+
+---
+
+### **7. Reenviar Código de Validación**
+- **Ruta:** /api/user/resend-code
+- **Método:** POST
+- **Descripción:** Genera y envía un nuevo código de validación para un usuario.
+- **Cuerpo de la solicitud (JSON):**
+  ```json
+  {
+    "email": "usuario@example.com"
+  }
+  ```
+- **Respuesta exitosa (200):**
+  ```json
+  {
+    "message": "Código de validación reenviado",
+    "validationCode": "654321" // Solo para pruebas, en producción esto se enviaría por email
+  }
+  ```
+- **Errores (400):**
+  ```json
+  {
+    "error": "El usuario ya está validado"
+  }
+  ```
+
+---
+
+### **8. Crear Compañía**
 - **Ruta:** /companies/create
 - **Método:** POST
-- **Descripción:** Permite crear una nueva compañía.
+- **Descripción:** Permite crear una nueva compañía. El jefe y los miembros deben tener cuentas validadas.
 - **Cuerpo de la solicitud (JSON):**
   ```json
   {
@@ -220,7 +285,13 @@ Este proyecto utiliza MongoDB como base de datos. Puedes usar:
 - **Errores (400):**
   ```json
   {
-    "error": "mensaje_de_error"
+    "error": "El jefe debe validar su cuenta antes de crear una compañía."
+  }
+  ```
+  o
+  ```json
+  {
+    "error": "El miembro con el correo miembro1@empresa.com debe validar su cuenta."
   }
   ```
 

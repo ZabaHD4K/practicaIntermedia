@@ -1,65 +1,49 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import Company from '../models/Company.js';
+import User from '../models/User.js';
 
-// Obtener la ruta del directorio actual
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+async function createCompany(emailJefe, nif, nombre, miembros) {
+  // Verificar si el NIF ya existe
+  const existingCompany = await Company.findOne({ nif });
+  if (existingCompany) {
+    throw new Error(`Ya existe una compañía con el NIF: ${nif}`);
+  }
 
-const userFilePath = path.join(__dirname, './db/User.json');
-const companyFilePath = path.join(__dirname, './db/Company.json');
+  // Verificar si el jefe existe
+  const jefe = await User.findOne({ email: emailJefe });
+  if (!jefe) {
+    throw new Error('El jefe con el correo proporcionado no existe.');
+  }
+  
+  // Verificar si el jefe está validado
+  if (!jefe.isValidated) {
+    throw new Error('El jefe debe validar su cuenta antes de crear una compañía.');
+  }
 
-// Función para leer un archivo JSON
-function readJSONFile(filePath) {
-    try {
-        const data = fs.readFileSync(filePath, 'utf8');
-        return data ? JSON.parse(data) : [];
-    } catch (error) {
-        console.error(`Error leyendo el archivo ${filePath}:`, error.message);
-        return [];
+  // Verificar que todos los miembros existan y estén validados
+  if (miembros && miembros.length > 0) {
+    for (const miembroEmail of miembros) {
+      const miembro = await User.findOne({ email: miembroEmail });
+      if (!miembro) {
+        throw new Error(`El miembro con el correo ${miembroEmail} no existe.`);
+      }
+      if (!miembro.isValidated) {
+        throw new Error(`El miembro con el correo ${miembroEmail} debe validar su cuenta.`);
+      }
     }
-}
+  }
 
-// Función para crear una compañía
-function createCompany(emailJefe, nif, nombre, miembros) {
-    const users = readJSONFile(userFilePath);
-    const companies = readJSONFile(companyFilePath);
+  // Crear la nueva compañía
+  const newCompany = new Company({
+    nif,
+    nombre,
+    miembros,
+    jefe: emailJefe
+  });
 
-    // Verificar si el NIF ya existe
-    const existingCompany = companies.find(company => company.nif === nif);
-    if (existingCompany) {
-        throw new Error(`Ya existe una compañía con el NIF: ${nif}`);
-    }
+  // Guardar la compañía en la base de datos
+  await newCompany.save();
 
-    // Verificar si el jefe existe
-    const jefe = users.find(user => user.email === emailJefe);
-    if (!jefe) {
-        throw new Error('El jefe con el correo proporcionado no existe.');
-    }
-
-    // Crear la nueva compañía
-    const newCompany = {
-        _id: generateUUID(),
-        nif,
-        nombre,
-        miembros,
-        jefe: emailJefe
-    };
-
-    // Guardar la compañía en el archivo JSON
-    companies.push(newCompany);
-    fs.writeFileSync(companyFilePath, JSON.stringify(companies, null, 2), 'utf8');
-
-    return newCompany;
-}
-
-// Función para generar un UUID
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        const r = (Math.random() * 16) | 0,
-            v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
+  return newCompany;
 }
 
 export { createCompany };

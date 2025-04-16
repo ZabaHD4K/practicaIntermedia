@@ -19,11 +19,20 @@ class UserRepository {
       nombre,
       apellidos,
       nif,
-      direccion
+      direccion,
+      isValidated: false
     });
 
+    // Generar código de validación antes de guardar
+    const validationCode = user.generateValidationCode();
+    
     await user.save();
-    return user._id;
+    
+    // Devolver el ID y el código de validación
+    return {
+      id: user._id,
+      validationCode
+    };
   }
 
   static async login({ email, password }) {
@@ -43,11 +52,65 @@ class UserRepository {
       throw new Error('La contraseña no es correcta');
     }
 
+    // Verificar si el usuario está validado
+    if (!user.isValidated) {
+      throw new Error('La cuenta no ha sido validada. Por favor, valida tu cuenta.');
+    }
+
     // Excluir la contraseña del resultado
     const userObject = user.toObject();
     delete userObject.password;
+    delete userObject.validationCode;
+    delete userObject.validationCodeExpires;
 
     return userObject;
+  }
+
+  static async validateUser({ email, code }) {
+    // Validar email
+    Validation.email(email);
+    
+    // Buscar usuario
+    const user = await User.findOne({ 
+      email,
+      validationCode: code,
+      validationCodeExpires: { $gt: Date.now() } // Verificar que el código no ha expirado
+    });
+
+    if (!user) {
+      throw new Error('Código de validación inválido o expirado');
+    }
+
+    // Actualizar usuario
+    user.isValidated = true;
+    user.validationCode = null;
+    user.validationCodeExpires = null;
+    
+    await user.save();
+    
+    return { success: true, message: 'Usuario validado correctamente' };
+  }
+
+  static async resendValidationCode(email) {
+    // Validar email
+    Validation.email(email);
+    
+    // Buscar usuario
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      throw new Error('El usuario no existe');
+    }
+    
+    if (user.isValidated) {
+      throw new Error('El usuario ya está validado');
+    }
+    
+    // Generar nuevo código
+    const validationCode = user.generateValidationCode();
+    await user.save();
+    
+    return { success: true, validationCode };
   }
 }
 
