@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Usuario</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .feature-card {
+            transition: transform 0.3s;
+            margin-bottom: 20px;
+            height: 100%;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .user-info {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Panel de Usuario</h1>
+            <button id="logoutBtn" class="btn btn-danger">Cerrar Sesión</button>
+        </div>
+
+        <div class="user-info" id="userInfoPanel">
+            <h3>Información del Usuario</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Nombre:</strong> <span id="userName">Cargando...</span></p>
+                    <p><strong>Apellidos:</strong> <span id="userLastName">Cargando...</span></p>
+                    <p><strong>Email:</strong> <span id="userEmail">Cargando...</span></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>NIF:</strong> <span id="userNif">Cargando...</span></p>
+                    <p><strong>Dirección:</strong> <span id="userAddress">Cargando...</span></p>
+                    <p><strong>Cuenta validada:</strong> <span id="userValidated">Cargando...</span></p>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="mb-4">Funciones disponibles</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Gestión de Clientes</h5>
+                        <p class="card-text">Accede al panel de gestión de clientes para administrar tus contactos.</p>
+                        <a href="/clients-protected" class="btn btn-primary">Gestionar Clientes</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Cambiar Contraseña</h5>
+                        <p class="card-text">Actualiza tu contraseña para mantener segura tu cuenta.</p>
+                        <a href="/change-password" class="btn btn-primary">Cambiar Contraseña</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Mis Compañías</h5>
+                        <p class="card-text">Visualiza y gestiona las compañías a las que perteneces.</p>
+                        <button id="viewCompaniesBtn" class="btn btn-primary">Ver Compañías</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para mostrar compañías -->
+        <div class="modal fade" id="companiesModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Mis Compañías</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="companiesList">
+                            <p>Cargando compañías...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // Cargar información del usuario al cargar la página
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/user/info', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const userData = await response.json();
+                    document.getElementById('userName').textContent = userData.nombre;
+                    document.getElementById('userLastName').textContent = userData.apellidos;
+                    document.getElementById('userEmail').textContent = userData.email;
+                    document.getElementById('userNif').textContent = userData.nif;
+                    document.getElementById('userAddress').textContent = userData.direccion;
+                    document.getElementById('userValidated').textContent = userData.isValidated ? 'Sí' : 'No';
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error al cargar información del usuario:', errorText);
+                    alert('Error al cargar la información del usuario');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cargar la información del usuario');
+            }
+        });
+
+        // Función de logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/login-page';
+                } else {
+                    const errorData = await response.json();
+                    console.error('Error al cerrar sesión:', errorData);
+                    alert('Error al cerrar sesión');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cerrar sesión');
+            }
+        });
+
+        // Cargar compañías al hacer clic en el botón
+        document.getElementById('viewCompaniesBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/companies', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const companies = await response.json();
+                    const companiesList = document.getElementById('companiesList');
+                    
+                    if (companies.length === 0) {
+                        companiesList.innerHTML = '<div class="alert alert-info">No perteneces a ninguna compañía.</div>';
+                    } else {
+                        let html = '<div class="list-group">';
+                        companies.forEach(company => {
+                            html += `
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h5 class="mb-1">${company.nombre}</h5>
+                                        <small>NIF: ${company.nif}</small>
+                                    </div>
+                                    <p class="mb-1"><strong>Rol:</strong> ${company.jefe === document.getElementById('userEmail').textContent ? 'Jefe' : 'Miembro'}</p>
+                                    <p class="mb-1"><strong>Miembros:</strong> ${company.miembros ? company.miembros.length : 0}</p>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        companiesList.innerHTML = html;
+                    }
+                    
+                    $('#companiesModal').modal('show');
+                } else {
+                    const errorData = await response.json();
+                    console.error('Error al cargar compañías:', errorData);
+                    alert('Error al cargar las compañías');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cargar las compañías');
+            }
+        });
+    </script>
+</body>
+</html>

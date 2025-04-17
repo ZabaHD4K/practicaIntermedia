@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listado de Clientes</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .client-card {
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        .client-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .badge-active {
+            background-color: #28a745;
+        }
+        .badge-inactive {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Listado de Clientes</h1>
+            <a href="/user-panel" class="btn btn-outline-secondary">Volver al Panel</a>
+        </div>
+
+        <% if (clients && clients.length > 0) { %>
+            <div class="row">
+                <% clients.forEach(client => { %>
+                    <div class="col-md-4">
+                        <div class="card client-card">
+                            <div class="card-header d-flex justify-content-between">
+                                <h5 class="mb-0"><%= client.nombre %> <%= client.apellidos %></h5>
+                                <% if (client.activo) { %>
+                                    <span class="badge badge-active">Activo</span>
+                                <% } else { %>
+                                    <span class="badge badge-inactive">Inactivo</span>
+                                <% } %>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Email:</strong> <%= client.email %></p>
+                                <p><strong>Teléfono:</strong> <%= client.telefono %></p>
+                                <p><strong>NIF:</strong> <%= client.nif %></p>
+                                <p><strong>Dirección:</strong> <%= client.direccion %></p>
+                                <% if (client.compania && client.compania.nombre) { %>
+                                    <p><strong>Compañía:</strong> <%= client.compania.nombre %></p>
+                                <% } else { %>
+                                    <p><strong>Compañía:</strong> <em>Sin compañía asignada</em></p>
+                                <% } %>
+                            </div>
+                            <div class="card-footer">
+                                <div class="btn-group w-100">
+                                    <button class="btn btn-outline-primary btn-sm" 
+                                            onclick="location.href='/api/clients/<%= client._id %>'">
+                                        Ver Detalles
+                                    </button>
+                                    <button class="btn btn-outline-warning btn-sm" 
+                                            onclick="editClient('<%= client._id %>')">
+                                        Editar
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteClient('<%= client._id %>')">
+                                        Eliminar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+        <% } else { %>
+            <div class="alert alert-info">
+                No hay clientes para mostrar. <a href="#" onclick="showNewClientModal()" class="alert-link">¡Añade uno nuevo!</a>
+            </div>
+        <% } %>
+
+        <div class="mt-4 mb-5">
+            <button class="btn btn-primary" onclick="showNewClientModal()">
+                <i class="fas fa-plus"></i> Añadir Nuevo Cliente
+            </button>
+        </div>
+    </div>
+
+    <!-- Este script sería para añadir funcionalidad a los botones -->
+    <!-- En una aplicación real, implementarías estas funciones -->
+    <script>
+        function editClient(id) {
+            alert('Función para editar el cliente ' + id + ' (a implementar)');
+            // En una aplicación real, redirigirías a una página de edición o mostrarías un modal
+        }
+        
+        function deleteClient(id) {
+            if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
+                // En una aplicación real, harías una llamada a la API para eliminar el cliente
+                fetch(`/api/clients/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                })
+                .then(response => {
+                    if (response.ok) {
+                        alert('Cliente eliminado correctamente');
+                        location.reload();
+                    } else {
+                        alert('Error al eliminar el cliente');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al eliminar el cliente');
+                });
+            }
+        }
+        
+        function showNewClientModal() {
+            alert('Función para mostrar modal de nuevo cliente (a implementar)');
+            // En una aplicación real, mostrarías un modal con un formulario para crear un nuevo cliente
+        }
+    </script>
+
+    <!-- Scripts de Bootstrap -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Font Awesome para iconos -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</body>
+</html>

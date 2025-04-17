@@ -10,7 +10,7 @@ import connectDB from './config/database.js';
 import dotenv from 'dotenv';
 import User from './models/User.js';
 import Company from './models/Company.js';
-import Client from './models/Client.js';
+import Client from './models/Client.js';  // Cambiado de client-model.js a Client.js
 
 // Configurar las variables de entorno
 dotenv.config();

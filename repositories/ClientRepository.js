@@ -1,4 +1,4 @@
-import Client from '../models/Client.js';
+import Client from '../models/Client.js';  // Asegurarnos de que importa desde Client.js
 import User from '../models/User.js';
 import Company from '../models/Company.js';
 
