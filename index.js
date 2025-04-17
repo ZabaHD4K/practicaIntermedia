@@ -1,5 +1,6 @@
 import express from 'express';
 import UserRepository from './repositories/UserRepository.js';
+import ClientRepository from './repositories/ClientRepository.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { createCompany } from './repositories/CompanyRepository.js';
@@ -8,6 +9,8 @@ import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 import dotenv from 'dotenv';
 import User from './models/User.js';
+import Company from './models/Company.js';
+import Client from './models/Client.js';
 
 // Configurar las variables de entorno
 dotenv.config();
@@ -207,6 +210,117 @@ app.post('/companies/create', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+
+// Endpoint para listar compañías disponibles para el usuario actual
+app.get('/api/companies', verifyToken, async (req, res) => {
+    try {
+        // Buscar compañías donde el usuario es jefe o miembro
+        const companies = await Company.find({
+            $or: [
+                { jefe: req.user.email },
+                { miembros: req.user.email }
+            ]
+        });
+        
+        res.json(companies);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener las compañías' });
+    }
+});
+
+// ===== INICIO NUEVOS ENDPOINTS PARA CLIENTES =====
+
+// Endpoint para crear un cliente (protegido)
+app.post('/api/clients', verifyToken, async (req, res) => {
+    try {
+        const { nombre, apellidos, email, telefono, nif, direccion, companiaId } = req.body;
+        
+        const newClient = await ClientRepository.create({
+            nombre,
+            apellidos,
+            email,
+            telefono,
+            nif,
+            direccion,
+            creadorEmail: req.user.email,
+            companiaId
+        });
+        
+        res.status(201).json(newClient);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint para listar todos los clientes (protegido)
+app.get('/api/clients', verifyToken, async (req, res) => {
+    try {
+        const clients = await ClientRepository.getAll();
+        res.json(clients);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener los clientes' });
+    }
+});
+
+// Endpoint para listar clientes creados por el usuario actual (protegido)
+app.get('/api/clients/me', verifyToken, async (req, res) => {
+    try {
+        const clients = await ClientRepository.getByCreador(req.user.email);
+        res.json(clients);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener los clientes' });
+    }
+});
+
+// Endpoint para obtener un cliente por ID (protegido)
+app.get('/api/clients/:id', verifyToken, async (req, res) => {
+    try {
+        const client = await ClientRepository.getById(req.params.id);
+        if (!client) {
+            return res.status(404).json({ error: 'Cliente no encontrado' });
+        }
+        res.json(client);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener el cliente' });
+    }
+});
+
+// Endpoint para actualizar un cliente (protegido)
+app.put('/api/clients/:id', verifyToken, async (req, res) => {
+    try {
+        const updateData = req.body;
+        const updatedClient = await ClientRepository.update(
+            req.params.id,
+            updateData,
+            req.user.email
+        );
+        res.json(updatedClient);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint para eliminar un cliente (protegido)
+app.delete('/api/clients/:id', verifyToken, async (req, res) => {
+    try {
+        const result = await ClientRepository.delete(req.params.id, req.user.email);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint similar a /protected pero para clientes
+app.get('/clients-protected', verifyToken, async (req, res) => {
+    try {
+        const clients = await ClientRepository.getAll();
+        res.render('clients', { clients }); // Renderiza una vista EJS
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener los clientes' });
+    }
+});
+
+// ===== FIN NUEVOS ENDPOINTS PARA CLIENTES =====
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;
