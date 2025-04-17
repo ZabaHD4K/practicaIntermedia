@@ -10,7 +10,9 @@ import connectDB from './config/database.js';
 import dotenv from 'dotenv';
 import User from './models/User.js';
 import Company from './models/Company.js';
-import Client from './models/Client.js';  // Cambiado de client-model.js a Client.js
+import Client from './models/Client.js';
+import ProjectRepository from './repositories/ProjectRepository.js';
+import Project from './models/Project.js';
 
 // Configurar las variables de entorno
 dotenv.config();
@@ -321,6 +323,119 @@ app.get('/clients-protected', verifyToken, async (req, res) => {
 });
 
 // ===== FIN NUEVOS ENDPOINTS PARA CLIENTES =====
+
+// ===== INICIO NUEVOS ENDPOINTS PARA PROYECTOS =====
+
+// Endpoint para crear un proyecto (protegido)
+app.post('/api/projects', verifyToken, async (req, res) => {
+    try {
+        const { titulo, descripcion, fechaInicio, fechaFin, estado, presupuesto, clienteId, companiaId } = req.body;
+        
+        const newProject = await ProjectRepository.create({
+            titulo,
+            descripcion,
+            fechaInicio,
+            fechaFin,
+            estado,
+            presupuesto,
+            clienteId,
+            companiaId,
+            creadorEmail: req.user.email
+        });
+        
+        res.status(201).json(newProject);
+    } catch (error) {
+        console.error('Error en la creación del proyecto:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint para listar todos los proyectos (protegido)
+app.get('/api/projects', verifyToken, async (req, res) => {
+    try {
+        const projects = await ProjectRepository.getAll();
+        res.json(projects);
+    } catch (error) {
+        console.error('Error al obtener proyectos:', error);
+        res.status(500).json({ error: 'Error al obtener los proyectos' });
+    }
+});
+
+// Endpoint para listar proyectos creados por el usuario actual (protegido)
+app.get('/api/projects/me', verifyToken, async (req, res) => {
+    try {
+        const projects = await ProjectRepository.getByCreador(req.user.email);
+        res.json(projects);
+    } catch (error) {
+        console.error('Error al obtener proyectos del usuario:', error);
+        res.status(500).json({ error: 'Error al obtener los proyectos' });
+    }
+});
+
+// Endpoint para obtener proyectos por cliente (protegido)
+app.get('/api/projects/client/:clientId', verifyToken, async (req, res) => {
+    try {
+        const projects = await ProjectRepository.getByCliente(req.params.clientId);
+        res.json(projects);
+    } catch (error) {
+        console.error('Error al obtener proyectos por cliente:', error);
+        res.status(500).json({ error: 'Error al obtener los proyectos del cliente' });
+    }
+});
+
+// Endpoint para obtener un proyecto por ID (protegido)
+app.get('/api/projects/:id', verifyToken, async (req, res) => {
+    try {
+        const project = await ProjectRepository.getById(req.params.id);
+        if (!project) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+        res.json(project);
+    } catch (error) {
+        console.error('Error al obtener proyecto por ID:', error);
+        res.status(500).json({ error: 'Error al obtener el proyecto' });
+    }
+});
+
+// Endpoint para actualizar un proyecto (protegido)
+app.put('/api/projects/:id', verifyToken, async (req, res) => {
+    try {
+        const updateData = req.body;
+        const updatedProject = await ProjectRepository.update(
+            req.params.id,
+            updateData,
+            req.user.email
+        );
+        res.json(updatedProject);
+    } catch (error) {
+        console.error('Error al actualizar proyecto:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint para eliminar un proyecto (protegido)
+app.delete('/api/projects/:id', verifyToken, async (req, res) => {
+    try {
+        const result = await ProjectRepository.delete(req.params.id, req.user.email);
+        res.json(result);
+    } catch (error) {
+        console.error('Error al eliminar proyecto:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint similar a /protected pero para proyectos
+app.get('/projects-protected', verifyToken, async (req, res) => {
+    try {
+        const projects = await ProjectRepository.getAll();
+        res.render('projects', { projects }); // Renderiza una vista EJS
+    } catch (error) {
+        console.error('Error al obtener proyectos para vista:', error);
+        res.status(500).json({ error: 'Error al obtener los proyectos' });
+    }
+});
+
+// ===== FIN NUEVOS ENDPOINTS PARA PROYECTOS =====
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;

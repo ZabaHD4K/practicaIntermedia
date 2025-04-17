@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Proyectos</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .project-card {
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .badge-pending {
+            background-color: #ffc107;
+        }
+        .badge-progress {
+            background-color: #17a2b8;
+        }
+        .badge-completed {
+            background-color: #28a745;
+        }
+        .badge-canceled {
+            background-color: #dc3545;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .project-description {
+            max-height: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Gestión de Proyectos</h1>
+            <div>
+                <a href="/user-panel" class="btn btn-outline-secondary mr-2">Volver al Panel</a>
+                <button class="btn btn-primary" data-toggle="modal" data-target="#newProjectModal">
+                    <i class="fas fa-plus"></i> Nuevo Proyecto
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtros para proyectos -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Filtros</h5>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filterStatus">Estado</label>
+                            <select class="form-control" id="filterStatus">
+                                <option value="">Todos</option>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En progreso">En progreso</option>
+                                <option value="Completado">Completado</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filterClient">Cliente</label>
+                            <select class="form-control" id="filterClient">
+                                <option value="">Todos</option>
+                                <!-- Se poblará con JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filterCompany">Compañía</label>
+                            <select class="form-control" id="filterCompany">
+                                <option value="">Todas</option>
+                                <!-- Se poblará con JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="applyFilters" class="btn btn-secondary w-100">Aplicar Filtros</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Listado de proyectos -->
+        <div id="projectsList">
+            <% if (projects && projects.length > 0) { %>
+                <div class="row">
+                    <% projects.forEach(project => { %>
+                        <div class="col-md-4 project-item" 
+                             data-status="<%= project.estado %>"
+                             data-client="<%= project.cliente ? project.cliente._id : '' %>"
+                             data-company="<%= project.compania ? project.compania._id : '' %>">
+                            <div class="card project-card">
+                                <div class="card-header d-flex justify-content-between">
+                                    <h5 class="mb-0"><%= project.nombre %></h5>
+                                    <% 
+                                    let badgeClass = "badge-secondary";
+                                    if (project.estado === "Pendiente") badgeClass = "badge-pending";
+                                    if (project.estado === "En progreso") badgeClass = "badge-progress";
+                                    if (project.estado === "Completado") badgeClass = "badge-completed";
+                                    if (project.estado === "Cancelado") badgeClass = "badge-canceled";
+                                    %>
+                                    <span class="badge <%= badgeClass %>"><%= project.estado %></span>
+                                </div>
+                                <div class="card-body">
+                                    <p class="project-description"><%= project.descripcion %></p>
+                                    <p><strong>Cliente:</strong> <%= project.cliente ? (project.cliente.nombre + ' ' + project.cliente.apellidos) : 'No especificado' %></p>
+                                    <p>
+                                        <strong>Fechas:</strong> 
+                                        <%= new Date(project.fechaInicio).toLocaleDateString() %> 
+                                        <% if (project.fechaFin) { %> 
+                                            - <%= new Date(project.fechaFin).toLocaleDateString() %>
+                                        <% } %>
+                                    </p>
+                                    <% if (project.presupuesto) { %>
+                                        <p><strong>Presupuesto:</strong> €<%= project.presupuesto.toLocaleString('es-ES') %></p>
+                                    <% } %>
+                                </div>
+                                <div class="card-footer">
+                                    <div class="btn-group w-100">
+                                        <button class="btn btn-outline-primary btn-sm" 
+                                                onclick="viewProject('<%= project._id %>')">
+                                            Ver Detalles
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm" 
+                                                onclick="editProject('<%= project._id %>')">
+                                            Editar
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" 
+                                                onclick="deleteProject('<%= project._id %>')">
+                                            Eliminar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="alert alert-info">
+                    No hay proyectos para mostrar. <a href="#" onclick="$('#newProjectModal').modal('show')" class="alert-link">¡Crea tu primer proyecto!</a>
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- Modal para nuevo proyecto -->
+    <div class="modal fade" id="newProjectModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Proyecto</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="newProjectForm">
+                        <div class="form-group">
+                            <label for="nombre">Nombre del Proyecto *</label>
+                            <input type="text" class="form-control" id="nombre" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="descripcion">Descripción *</label>
+                            <textarea class="form-control" id="descripcion" rows="3" required></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="fechaInicio">Fecha de Inicio</label>
+                                    <input type="date" class="form-control" id="fechaInicio">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="fechaFin">Fecha de Fin (estimada)</label>
+                                    <input type="date" class="form-control" id="fechaFin">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="estado">Estado</label>
+                                    <select class="form-control" id="estado">
+                                        <option value="Pendiente">Pendiente</option>
+                                        <option value="En progreso">En progreso</option>
+                                        <option value="Completado">Completado</option>
+                                        <option value="Cancelado">Cancelado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="presupuesto">Presupuesto (€)</label>
+                                    <input type="number" class="form-control" id="presupuesto" min="0" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="clienteId">Cliente *</label>
+                            <select class="form-control" id="clienteId" required>
+                                <option value="">Selecciona un cliente</option>
+                                <!-- Se poblará con JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="companiaId">Compañía</label>
+                            <select class="form-control" id="companiaId">
+                                <option value="">Ninguna</option>
+                                <!-- Se poblará con JavaScript -->
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveProjectBtn">Guardar Proyecto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar proyecto -->
+    <div class="modal fade" id="editProjectModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Proyecto</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProjectForm">
+                        <input type="hidden" id="editProjectId">
+                        <div class="form-group">
+                            <label for="editNombre">Nombre del Proyecto *</label>
+                            <input type="text" class="form-control" id="editNombre" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editDescripcion">Descripción *</label>
+                            <textarea class="form-control" id="editDescripcion" rows="3" required></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="editFechaInicio">Fecha de Inicio</label>
+                                    <input type="date" class="form-control" id="editFechaInicio">
+                                </div
