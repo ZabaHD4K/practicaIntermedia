@@ -13,6 +13,9 @@ import Company from './models/Company.js';
 import Client from './models/Client.js';
 import ProjectRepository from './repositories/ProjectRepository.js';
 import Project from './models/Project.js';
+import AlbaranRepository from './repositories/AlbaranRepository.js';
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
 
 // Configurar las variables de entorno
 dotenv.config();
@@ -436,6 +439,216 @@ app.get('/projects-protected', verifyToken, async (req, res) => {
 });
 
 // ===== FIN NUEVOS ENDPOINTS PARA PROYECTOS =====
+
+// ===== INICIO NUEVOS ENDPOINTS PARA ALBARANES =====
+
+// Endpoint para crear un albarán (protegido)
+app.post('/api/albaranes', verifyToken, async (req, res) => {
+  try {
+    const { projectId, hoursEntries, materialEntries, observations } = req.body;
+    
+    const newAlbaran = await AlbaranRepository.create({
+      projectId,
+      creatorEmail: req.user.email,
+      hoursEntries,
+      materialEntries,
+      observations
+    });
+    
+    res.status(201).json(newAlbaran);
+  } catch (error) {
+    console.error('Error en la creación del albarán:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Endpoint para listar todos los albaranes (protegido)
+app.get('/api/albaranes', verifyToken, async (req, res) => {
+  try {
+    const albaranes = await AlbaranRepository.getAll();
+    res.json(albaranes);
+  } catch (error) {
+    console.error('Error al obtener albaranes:', error);
+    res.status(500).json({ error: 'Error al obtener los albaranes' });
+  }
+});
+
+// Endpoint para obtener un albarán por ID (protegido)
+app.get('/api/albaranes/:id', verifyToken, async (req, res) => {
+  try {
+    const albaran = await AlbaranRepository.getById(req.params.id);
+    if (!albaran) {
+      return res.status(404).json({ error: 'Albarán no encontrado' });
+    }
+    res.json(albaran);
+  } catch (error) {
+    console.error('Error al obtener albarán por ID:', error);
+    res.status(500).json({ error: 'Error al obtener el albarán' });
+  }
+});
+
+// Endpoint para generar y descargar un albarán en PDF (protegido)
+app.get('/api/albaranes/pdf/:id', verifyToken, async (req, res) => {
+  try {
+    const albaran = await AlbaranRepository.generatePdf(req.params.id, req.user.email);
+    
+    // Verificar si el albarán está firmado (solo se pueden generar PDFs de albaranes firmados)
+    if (!albaran.isSigned) {
+      return res.status(400).json({ error: 'Solo se pueden generar PDFs de albaranes firmados' });
+    }
+    
+    // Crear un nuevo documento PDF
+    const doc = new PDFDocument({ margin: 50 });
+    
+    // Configurar cabecera para descarga
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=albaran-${albaran.number}.pdf`);
+    
+    // Enviar el PDF directamente al response
+    doc.pipe(res);
+    
+    // Añadir contenido al PDF
+    
+    // Título y número de albarán
+    doc.fontSize(20).text(`ALBARÁN ${albaran.number}`, { align: 'center' });
+    doc.moveDown();
+    
+    // Fecha
+    doc.fontSize(12).text(`Fecha: ${new Date(albaran.date).toLocaleDateString()}`, { align: 'right' });
+    doc.moveDown();
+    
+    // Información del cliente
+    doc.fontSize(14).text('DATOS DEL CLIENTE', { underline: true });
+    doc.fontSize(12).text(`Nombre: ${albaran.client.nombre} ${albaran.client.apellidos}`);
+    doc.text(`NIF: ${albaran.client.nif}`);
+    doc.text(`Dirección: ${albaran.client.direccion}`);
+    doc.text(`Email: ${albaran.client.email}`);
+    doc.text(`Teléfono: ${albaran.client.telefono}`);
+    doc.moveDown();
+    
+    // Información del proyecto
+    doc.fontSize(14).text('DATOS DEL PROYECTO', { underline: true });
+    doc.fontSize(12).text(`Título: ${albaran.project.titulo}`);
+    doc.text(`Descripción: ${albaran.project.descripcion}`);
+    doc.text(`Estado: ${albaran.project.estado}`);
+    doc.moveDown();
+    
+    // Información del creador del albarán
+    doc.fontSize(14).text('EMITIDO POR', { underline: true });
+    if (albaran.creatorDetails) {
+      doc.fontSize(12).text(`Nombre: ${albaran.creatorDetails.nombre} ${albaran.creatorDetails.apellidos}`);
+      doc.text(`Email: ${albaran.creatorDetails.email}`);
+    } else {
+      doc.fontSize(12).text(`Email: ${albaran.createdBy}`);
+    }
+    doc.moveDown();
+    
+    // Detalles de horas trabajadas si existen
+    if (albaran.hoursEntries && albaran.hoursEntries.length > 0) {
+      doc.fontSize(14).text('HORAS TRABAJADAS', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Tabla de horas
+      albaran.hoursEntries.forEach((entry, index) => {
+        const userName = entry.userDetails ? 
+          `${entry.userDetails.nombre} ${entry.userDetails.apellidos}` : 
+          entry.user;
+          
+        doc.fontSize(11).text(`${index + 1}. ${userName} - ${entry.hours} horas`, { continued: true });
+        doc.text(`   Fecha: ${new Date(entry.date).toLocaleDateString()}`, { align: 'right' });
+        doc.fontSize(10).text(`   Descripción: ${entry.description}`);
+        doc.moveDown(0.5);
+      });
+      
+      doc.fontSize(12).text(`Total horas: ${albaran.totalHours}`, { align: 'right' });
+      doc.moveDown();
+    }
+    
+    // Detalles de materiales si existen
+    if (albaran.materialEntries && albaran.materialEntries.length > 0) {
+      doc.fontSize(14).text('MATERIALES', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Tabla de materiales
+      albaran.materialEntries.forEach((entry, index) => {
+        doc.fontSize(11).text(`${index + 1}. ${entry.name} - Cantidad: ${entry.quantity}`, { continued: true });
+        doc.text(`   Precio: ${entry.unitPrice.toFixed(2)}€`, { align: 'right' });
+        if (entry.description) {
+          doc.fontSize(10).text(`   Descripción: ${entry.description}`);
+        }
+        doc.fontSize(11).text(`   Subtotal: ${entry.totalPrice.toFixed(2)}€`, { align: 'right' });
+        doc.moveDown(0.5);
+      });
+      
+      doc.fontSize(12).text(`Total materiales: ${albaran.totalMaterials.toFixed(2)}€`, { align: 'right' });
+      doc.moveDown();
+    }
+    
+    // Total general
+    doc.fontSize(16).text(`TOTAL: ${albaran.totalAmount.toFixed(2)}€`, { align: 'right' });
+    doc.moveDown();
+    
+    // Observaciones si existen
+    if (albaran.observations) {
+      doc.fontSize(14).text('OBSERVACIONES', { underline: true });
+      doc.fontSize(12).text(albaran.observations);
+      doc.moveDown();
+    }
+    
+    // Información de firma
+    doc.fontSize(14).text('FIRMA', { underline: true });
+    doc.fontSize(12).text(`Firmado por: ${albaran.signedBy}`);
+    doc.text(`Fecha de firma: ${new Date(albaran.signatureDate).toLocaleDateString()}`);
+    
+    // Añadir imagen de firma si existe
+    if (albaran.signatureImage) {
+      try {
+        // Si es una URL o base64, habría que adaptarlo
+        doc.image(albaran.signatureImage, { width: 200 });
+      } catch (error) {
+        console.error('Error al cargar la imagen de firma:', error);
+        doc.text('Firma digital verificada');
+      }
+    } else {
+      doc.text('Firma digital verificada');
+    }
+    
+    // Finalizar el documento
+    doc.end();
+  } catch (error) {
+    console.error('Error al generar PDF del albarán:', error);
+    res.status(500).json({ error: 'Error al generar el PDF del albarán' });
+  }
+});
+
+// Endpoint para actualizar un albarán (protegido)
+app.put('/api/albaranes/:id', verifyToken, async (req, res) => {
+  try {
+    const updateData = req.body;
+    const updatedAlbaran = await AlbaranRepository.update(
+      req.params.id,
+      updateData,
+      req.user.email
+    );
+    res.json(updatedAlbaran);
+  } catch (error) {
+    console.error('Error al actualizar albarán:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Endpoint para eliminar (cancelar) un albarán (protegido)
+app.delete('/api/albaranes/:id', verifyToken, async (req, res) => {
+  try {
+    const result = await AlbaranRepository.delete(req.params.id, req.user.email);
+    res.json(result);
+  } catch (error) {
+    console.error('Error al eliminar albarán:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ===== FIN NUEVOS ENDPOINTS PARA ALBARANES =====
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;
