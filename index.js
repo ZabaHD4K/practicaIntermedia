@@ -17,6 +17,13 @@ import AlbaranRepository from './repositories/AlbaranRepository.js';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 
+
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+
+const swaggerDocument = YAML.load('./swagger.yaml');
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 // Configurar las variables de entorno
 dotenv.config();
 

@@ -1,0 +1,1234 @@
+
+openapi: 3.0.0
+info:
+  title: API de Gestión Empresarial
+  description: |
+    API para gestionar usuarios, compañías, clientes, proyectos y albaranes en un sistema de gestión empresarial.
+    Permite administrar el ciclo completo de proyectos, desde la creación hasta la generación de albaranes.
+  version: 1.0.0
+  contact:
+    email: admin@ejemplo.com
+servers:
+  - url: http://localhost:3000
+    description: Servidor de desarrollo
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          description: ID único del usuario
+        email:
+          type: string
+          format: email
+          description: Correo electrónico (único)
+        nombre:
+          type: string
+          description: Nombre del usuario
+        apellidos:
+          type: string
+          description: Apellidos del usuario
+        nif:
+          type: string
+          description: Número de Identificación Fiscal
+        direccion:
+          type: string
+          description: Dirección física del usuario
+        isValidated:
+          type: boolean
+          description: Indica si la cuenta está validada
+      required:
+        - email
+        - nombre
+        - apellidos
+        - nif
+        - direccion
+    Company:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          description: ID único de la compañía
+        nif:
+          type: string
+          description: Número de Identificación Fiscal (único)
+        nombre:
+          type: string
+          description: Nombre de la compañía
+        miembros:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Lista de correos electrónicos de los miembros
+        jefe:
+          type: string
+          format: email
+          description: Correo electrónico del jefe de la compañía
+      required:
+        - nif
+        - nombre
+        - jefe
+    Client:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          description: ID único del cliente
+        nombre:
+          type: string
+          description: Nombre del cliente
+        apellidos:
+          type: string
+          description: Apellidos del cliente
+        email:
+          type: string
+          format: email
+          description: Correo electrónico (único)
+        telefono:
+          type: string
+          description: Número de teléfono
+        nif:
+          type: string
+          description: Número de Identificación Fiscal (único)
+        direccion:
+          type: string
+          description: Dirección física del cliente
+        creador:
+          type: string
+          format: email
+          description: Correo electrónico del usuario que creó el cliente
+        compania:
+          type: string
+          format: ObjectId
+          description: ID de la compañía asociada (opcional)
+        activo:
+          type: boolean
+          description: Indica si el cliente está activo
+      required:
+        - nombre
+        - apellidos
+        - email
+        - telefono
+        - nif
+        - direccion
+        - creador
+    Project:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          description: ID único del proyecto
+        titulo:
+          type: string
+          description: Título del proyecto
+        descripcion:
+          type: string
+          description: Descripción detallada del proyecto
+        fechaInicio:
+          type: string
+          format: date
+          description: Fecha de inicio del proyecto
+        fechaFin:
+          type: string
+          format: date
+          description: Fecha de fin estimada del proyecto
+        estado:
+          type: string
+          enum: [Pendiente, En progreso, Completado, Cancelado]
+          description: Estado actual del proyecto
+        presupuesto:
+          type: number
+          format: float
+          description: Presupuesto del proyecto
+        cliente:
+          type: string
+          format: ObjectId
+          description: ID del cliente asociado
+        compania:
+          type: string
+          format: ObjectId
+          description: ID de la compañía asociada (opcional)
+        creador:
+          type: string
+          format: email
+          description: Correo electrónico del usuario que creó el proyecto
+        activo:
+          type: boolean
+          description: Indica si el proyecto está activo
+      required:
+        - titulo
+        - descripcion
+        - fechaInicio
+        - fechaFin
+        - presupuesto
+        - cliente
+        - creador
+    HoursEntry:
+      type: object
+      properties:
+        user:
+          type: string
+          format: email
+          description: Correo electrónico del usuario
+        hours:
+          type: number
+          format: float
+          description: Cantidad de horas trabajadas
+        description:
+          type: string
+          description: Descripción del trabajo realizado
+        date:
+          type: string
+          format: date-time
+          description: Fecha del trabajo
+      required:
+        - user
+        - hours
+        - description
+    MaterialEntry:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nombre del material
+        quantity:
+          type: number
+          format: float
+          description: Cantidad de material
+        unitPrice:
+          type: number
+          format: float
+          description: Precio unitario
+        totalPrice:
+          type: number
+          format: float
+          description: Precio total (cantidad × precio unitario)
+        description:
+          type: string
+          description: Descripción del material (opcional)
+      required:
+        - name
+        - quantity
+        - unitPrice
+        - totalPrice
+    Albaran:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          description: ID único del albarán
+        number:
+          type: string
+          description: Número único de albarán generado automáticamente
+        project:
+          type: string
+          format: ObjectId
+          description: ID del proyecto asociado
+        client:
+          type: string
+          format: ObjectId
+          description: ID del cliente asociado
+        createdBy:
+          type: string
+          format: email
+          description: Correo electrónico del usuario que creó el albarán
+        date:
+          type: string
+          format: date-time
+          description: Fecha de creación
+        hoursEntries:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoursEntry'
+          description: Lista de registros de horas
+        materialEntries:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialEntry'
+          description: Lista de registros de materiales
+        observations:
+          type: string
+          description: Observaciones generales
+        totalHours:
+          type: number
+          format: float
+          description: Total de horas (calculado automáticamente)
+        totalMaterials:
+          type: number
+          format: float
+          description: Total coste de materiales (calculado automáticamente)
+        totalAmount:
+          type: number
+          format: float
+          description: Importe total (calculado automáticamente)
+        isSigned:
+          type: boolean
+          description: Indica si el albarán está firmado
+        signatureDate:
+          type: string
+          format: date-time
+          description: Fecha de firma
+        signedBy:
+          type: string
+          format: email
+          description: Correo electrónico de quien firmó
+        signatureImage:
+          type: string
+          description: URL o datos de la imagen de firma
+        status:
+          type: string
+          enum: [draft, pending, signed, cancelled]
+          description: Estado del albarán
+      required:
+        - number
+        - project
+        - client
+        - createdBy
+        
+  responses:
+    Unauthorized:
+      description: No autorizado - es necesario autenticarse
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: No autorizado
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Recurso no encontrado
+    BadRequest:
+      description: Error en la solicitud
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Error en los datos enviados
+
+security:
+  - cookieAuth: []
+
+paths:
+  /register:
+    post:
+      tags:
+        - Usuarios
+      summary: Registrar un nuevo usuario
+      description: Crea una nueva cuenta de usuario
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                nombre:
+                  type: string
+                apellidos:
+                  type: string
+                nif:
+                  type: string
+                direccion:
+                  type: string
+              required:
+                - email
+                - password
+                - nombre
+                - apellidos
+                - nif
+                - direccion
+      responses:
+        '201':
+          description: Usuario registrado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  message:
+                    type: string
+                  validationCode:
+                    type: string
+                    description: Código para validar la cuenta
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/user/validation:
+    put:
+      tags:
+        - Usuarios
+      summary: Validar cuenta de usuario
+      description: Valida la cuenta de usuario con un código
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+              required:
+                - email
+                - code
+      responses:
+        '200':
+          description: Cuenta validada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/user/resend-code:
+    post:
+      tags:
+        - Usuarios
+      summary: Reenviar código de validación
+      description: Genera y envía un nuevo código de validación al usuario
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required:
+                - email
+      responses:
+        '200':
+          description: Código reenviado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  validationCode:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /login:
+    post:
+      tags:
+        - Usuarios
+      summary: Iniciar sesión
+      description: Inicia sesión con email y contraseña
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Inicio de sesión exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /logout:
+    post:
+      tags:
+        - Usuarios
+      summary: Cerrar sesión
+      description: Cierra la sesión actual y elimina la cookie de token
+      responses:
+        '200':
+          description: Sesión cerrada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Sesión cerrada correctamente
+
+  /api/user/change-password:
+    post:
+      tags:
+        - Usuarios
+      summary: Cambiar contraseña
+      description: Cambia la contraseña del usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+              required:
+                - currentPassword
+                - newPassword
+      responses:
+        '200':
+          description: Contraseña cambiada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/user/info:
+    get:
+      tags:
+        - Usuarios
+      summary: Obtener información del usuario
+      description: Devuelve la información del usuario autenticado
+      responses:
+        '200':
+          description: Información del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /companies/create:
+    post:
+      tags:
+        - Compañías
+      summary: Crear nueva compañía
+      description: Crea una nueva compañía con el usuario como jefe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emailJefe:
+                  type: string
+                  format: email
+                nif:
+                  type: string
+                nombre:
+                  type: string
+                miembros:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+              required:
+                - emailJefe
+                - nif
+                - nombre
+      responses:
+        '201':
+          description: Compañía creada correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/companies:
+    get:
+      tags:
+        - Compañías
+      summary: Listar compañías del usuario
+      description: Devuelve las compañías donde el usuario es jefe o miembro
+      responses:
+        '200':
+          description: Lista de compañías
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Company'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+
+  /api/clients:
+    get:
+      tags:
+        - Clientes
+      summary: Listar todos los clientes
+      description: Devuelve todos los clientes activos
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+    post:
+      tags:
+        - Clientes
+      summary: Crear nuevo cliente
+      description: Crea un nuevo cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                apellidos:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                telefono:
+                  type: string
+                nif:
+                  type: string
+                direccion:
+                  type: string
+                companiaId:
+                  type: string
+                  format: ObjectId
+              required:
+                - nombre
+                - apellidos
+                - email
+                - telefono
+                - nif
+                - direccion
+      responses:
+        '201':
+          description: Cliente creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/clients/me:
+    get:
+      tags:
+        - Clientes
+      summary: Listar clientes creados por el usuario
+      description: Devuelve los clientes creados por el usuario autenticado
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+
+  /api/clients/{id}:
+    get:
+      tags:
+        - Clientes
+      summary: Obtener cliente por ID
+      description: Devuelve la información de un cliente por su ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Información del cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Error del servidor
+    put:
+      tags:
+        - Clientes
+      summary: Actualizar cliente
+      description: Actualiza la información de un cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                apellidos:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                telefono:
+                  type: string
+                nif:
+                  type: string
+                direccion:
+                  type: string
+                companiaId:
+                  type: string
+                  format: ObjectId
+      responses:
+        '200':
+          description: Cliente actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Clientes
+      summary: Eliminar cliente
+      description: Marca un cliente como inactivo (borrado lógico)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Cliente eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/projects:
+    get:
+      tags:
+        - Proyectos
+      summary: Listar todos los proyectos
+      description: Devuelve todos los proyectos activos
+      responses:
+        '200':
+          description: Lista de proyectos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+    post:
+      tags:
+        - Proyectos
+      summary: Crear nuevo proyecto
+      description: Crea un nuevo proyecto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                titulo:
+                  type: string
+                descripcion:
+                  type: string
+                fechaInicio:
+                  type: string
+                  format: date
+                fechaFin:
+                  type: string
+                  format: date
+                estado:
+                  type: string
+                  enum: [Pendiente, En progreso, Completado, Cancelado]
+                presupuesto:
+                  type: number
+                  format: float
+                clienteId:
+                  type: string
+                  format: ObjectId
+                companiaId:
+                  type: string
+                  format: ObjectId
+              required:
+                - titulo
+                - descripcion
+                - fechaInicio
+                - fechaFin
+                - presupuesto
+                - clienteId
+      responses:
+        '201':
+          description: Proyecto creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/projects/me:
+    get:
+      tags:
+        - Proyectos
+      summary: Listar proyectos creados por el usuario
+      description: Devuelve los proyectos creados por el usuario autenticado
+      responses:
+        '200':
+          description: Lista de proyectos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+
+  /api/projects/client/{clientId}:
+    get:
+      tags:
+        - Proyectos
+      summary: Listar proyectos por cliente
+      description: Devuelve los proyectos asociados a un cliente específico
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Lista de proyectos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+
+  /api/projects/{id}:
+    get:
+      tags:
+        - Proyectos
+      summary: Obtener proyecto por ID
+      description: Devuelve la información de un proyecto por su ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Información del proyecto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Error del servidor
+    put:
+      tags:
+        - Proyectos
+      summary: Actualizar proyecto
+      description: Actualiza la información de un proyecto
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                titulo:
+                  type: string
+                descripcion:
+                  type: string
+                fechaInicio:
+                  type: string
+                  format: date
+                fechaFin:
+                  type: string
+                  format: date
+                estado:
+                  type: string
+                  enum: [Pendiente, En progreso, Completado, Cancelado]
+                presupuesto:
+                  type: number
+                  format: float
+                clienteId:
+                  type: string
+                  format: ObjectId
+                companiaId:
+                  type: string
+                  format: ObjectId
+      responses:
+        '200':
+          description: Proyecto actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Proyectos
+      summary: Eliminar proyecto
+      description: Marca un proyecto como inactivo (borrado lógico)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Proyecto eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/albaranes:
+    get:
+      tags:
+        - Albaranes
+      summary: Listar todos los albaranes
+      description: Devuelve todos los albaranes
+      responses:
+        '200':
+          description: Lista de albaranes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Albaran'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Error del servidor
+    post:
+      tags:
+        - Albaranes
+      summary: Crear nuevo albarán
+      description: Crea un nuevo albarán para un proyecto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId:
+                  type: string
+                  format: ObjectId
+                hoursEntries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/HoursEntry'
+                materialEntries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MaterialEntry'
+                observations:
+                  type: string
+              required:
+                - projectId
+      responses:
+        '201':
+          description: Albarán creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Albaran'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/albaranes/{id}:
+    get:
+      tags:
+        - Albaranes
+      summary: Obtener albarán por ID
+      description: Devuelve la información de un albarán por su ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Información del albarán
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Albaran'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Error del servidor
+    put:
+      tags:
+        - Albaranes
+      summary: Actualizar albarán
+      description: Actualiza la información de un albarán (solo si no está firmado)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hoursEntries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/HoursEntry'
+                materialEntries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/MaterialEntry'
+                observations:
+                  type: string
+                isSigned:
+                  type: boolean
+                signedBy:
+                  type: string
+                  format: email
+                signatureImage:
+                  type: string
+      responses:
+        '200':
+          description: Albarán actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Albaran'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Albaranes
+      summary: Eliminar/cancelar albarán
+      description: Cambia el estado del albarán a 'cancelled' (solo si no está firmado)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
+        '200':
+          description: Albarán cancelado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/albaranes/pdf/{id}:
+    get:
+      tags:
+        - Albaranes
+      summary: Generar PDF del albarán
+      description: Genera y devuelve un archivo PDF del albarán (solo si está firmado)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ObjectId
+      responses:
