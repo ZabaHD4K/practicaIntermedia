@@ -1,373 +1,336 @@
-import fetch from 'node-fetch';
-import readline from 'readline';
-import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import Client from '../models/Client.js';
+import Project from '../models/Project.js';
+import Albaran from '../models/Albaran.js';
+import AlbaranRepository from '../repositories/AlbaranRepository.js';
+import connectDB from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Configurar variables de entorno
-dotenv.config();
+// Obtener directorio actual
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Configurar readline para entrada por consola
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
+// Mock para PDFDocument
+jest.mock('pdfkit', () => {
+  return jest.fn().mockImplementation(() => {
+    return {
+      pipe: jest.fn().mockReturnThis(),
+      fontSize: jest.fn().mockReturnThis(),
+      text: jest.fn().mockReturnThis(),
+      moveDown: jest.fn().mockReturnThis(),
+      image: jest.fn().mockReturnThis(),
+      end: jest.fn()
+    };
+  });
 });
 
-// Función para preguntar al usuario
-const question = (prompt) => {
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      resolve(answer);
-    });
-  });
-};
-
-// URL base para las peticiones
-const BASE_URL = 'http://localhost:3000';
-
-// Variables para almacenar datos importantes entre pasos
-let userId = '';
-let userEmail = '';
-let userPassword = '';
-let jwtToken = '';
-let cookieJar = '';
-let clientId = '';
-let projectId = '';
-let albaranId = '';
-
-// Función para manejar las cookies
-const saveCookies = (headers) => {
-  const cookies = headers.get('set-cookie');
-  if (cookies) {
-    cookieJar = cookies;
-    console.log('Cookies guardadas.');
-  }
-};
-
-// Función para hacer peticiones con cookies
-const fetchWithCookies = async (url, options = {}) => {
-  if (cookieJar) {
-    options.headers = {
-      ...options.headers,
-      'Cookie': cookieJar
-    };
-  }
-  return fetch(url, options);
-};
-
-// Función principal que ejecuta todos los pasos del test
-const runTest = async () => {
-  try {
-    console.log('====================================');
-    console.log('INICIANDO TEST DE ALBARANES');
-    console.log('====================================\n');
-    
-    // 1. Solicitar credenciales de usuario ya validado
-    console.log('\n1. CONFIGURACIÓN INICIAL');
-    console.log('------------------------------------');
-    userEmail = await question('Ingrese email de un usuario ya validado: ');
-    userPassword = await question('Ingrese contraseña del usuario: ');
-    
-    // 2. Iniciar sesión con el usuario
-    console.log('\n2. INICIANDO SESIÓN');
-    console.log('------------------------------------');
-    let response = await fetch(`${BASE_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: userEmail, password: userPassword })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al iniciar sesión: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    // Guardar las cookies (contienen el token JWT)
-    saveCookies(response.headers);
-    
-    let data = await response.json();
-    console.log('✅ Sesión iniciada correctamente');
-    console.log(`Usuario: ${data.user.nombre} ${data.user.apellidos}`);
-    
-    jwtToken = data.token;
-    userId = data.user._id;
-    
-    // 3. Obtener proyectos disponibles para asociar al albarán
-    console.log('\n3. OBTENIENDO PROYECTOS DISPONIBLES');
-    console.log('------------------------------------');
-    
-    try {
-      response = await fetchWithCookies(`${BASE_URL}/api/projects`);
-      if (response.ok) {
-        data = await response.json();
-        if (data && data.length > 0) {
-          console.log('✅ Proyectos disponibles:');
-          data.forEach((project, index) => {
-            console.log(`${index + 1}. ${project.titulo} (ID: ${project._id})`);
-            if (project.cliente && typeof project.cliente === 'object') {
-              console.log(`   Cliente: ${project.cliente.nombre} ${project.cliente.apellidos}`);
-            }
-          });
-          
-          const projectIndex = await question('Seleccione el número del proyecto a usar: ');
-          if (projectIndex > 0 && projectIndex <= data.length) {
-            projectId = data[projectIndex - 1]._id;
-            clientId = data[projectIndex - 1].cliente._id || data[projectIndex - 1].cliente;
-            console.log(`✅ Proyecto seleccionado: ${data[projectIndex - 1].titulo}`);
-            
-            // Verificar si la información del cliente está disponible
-            if (data[projectIndex - 1].cliente && typeof data[projectIndex - 1].cliente === 'object') {
-              console.log(`✅ Cliente asociado: ${data[projectIndex - 1].cliente.nombre} ${data[projectIndex - 1].cliente.apellidos}`);
-            } else {
-              console.log(`✅ Cliente ID: ${clientId}`);
-            }
-          } else {
-            throw new Error('No se seleccionó ningún proyecto válido');
-          }
-        } else {
-          throw new Error('No se encontraron proyectos disponibles');
+// Mock para fs.createWriteStream
+jest.mock('fs', () => {
+  const originalFs = jest.requireActual('fs');
+  return {
+    ...originalFs,
+    createWriteStream: jest.fn().mockReturnValue({
+      on: jest.fn().mockImplementation((event, callback) => {
+        if (event === 'finish') {
+          callback();
         }
-      } else {
-        throw new Error('No se pudo acceder a los proyectos');
-      }
-    } catch (error) {
-      console.log('❌ Error al obtener proyectos:', error.message);
-      throw new Error('Se requiere al menos un proyecto para crear un albarán');
+        return this;
+      })
+    }),
+    promises: {
+      ...originalFs.promises,
+      mkdir: jest.fn().mockResolvedValue(undefined),
+      access: jest.fn().mockResolvedValue(undefined)
     }
+  };
+});
+
+describe('Albaranes API', () => {
+  let connection;
+  let testUser;
+  let testClient;
+  let testProject;
+  let testAlbaran;
+  
+  // Configuración antes de todas las pruebas
+  beforeAll(async () => {
+    // Conectar a la base de datos de prueba
+    connection = await connectDB();
     
-    // 4. Crear un nuevo albarán
-    console.log('\n4. CREANDO NUEVO ALBARÁN');
-    console.log('------------------------------------');
+    // Limpiar datos de prueba
+    await User.deleteMany({});
+    await Client.deleteMany({});
+    await Project.deleteMany({});
+    await Albaran.deleteMany({});
     
-    const timestamp = Date.now();
+    // Crear usuario de prueba
+    testUser = new User({
+      email: 'test@example.com',
+      password: 'password123',
+      nombre: 'Test',
+      apellidos: 'User',
+      nif: 'TEST123',
+      direccion: 'Test Address',
+      isValidated: true
+    });
+    await testUser.save();
     
-    // Preparar datos para el albarán
+    // Crear cliente de prueba
+    testClient = new Client({
+      nombre: 'Test',
+      apellidos: 'Client',
+      email: 'client@example.com',
+      telefono: '123456789',
+      nif: 'CLIENT123',
+      direccion: 'Client Address',
+      creador: testUser.email
+    });
+    await testClient.save();
+    
+    // Crear proyecto de prueba
+    testProject = new Project({
+      titulo: 'Test Project',
+      descripcion: 'Project Description',
+      fechaInicio: new Date(),
+      fechaFin: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días después
+      estado: 'En progreso',
+      presupuesto: 1000,
+      cliente: testClient._id,
+      creador: testUser.email
+    });
+    await testProject.save();
+  });
+  
+  // Limpieza después de todas las pruebas
+  afterAll(async () => {
+    // Limpiar datos de prueba
+    await User.deleteMany({});
+    await Client.deleteMany({});
+    await Project.deleteMany({});
+    await Albaran.deleteMany({});
+    
+    // Cerrar conexión a base de datos
+    await mongoose.connection.close();
+  });
+  
+  // Prueba de creación de albarán
+  test('Crear un albarán', async () => {
     const albaranData = {
-      projectId: projectId,
+      projectId: testProject._id.toString(),
+      creatorEmail: testUser.email,
       hoursEntries: [
         {
-          user: userEmail,
+          user: testUser.email,
           hours: 8,
-          description: `Trabajo en el proyecto - ${timestamp}`
+          description: 'Test hours'
         }
       ],
       materialEntries: [
         {
-          name: 'Material de prueba',
+          name: 'Test Material',
           quantity: 2,
-          unitPrice: 15.50,
-          totalPrice: 31.00,
-          description: 'Material usado para pruebas'
+          unitPrice: 10,
+          totalPrice: 20,
+          description: 'Test material description'
         }
       ],
-      observations: `Observaciones de prueba - Creado en test a las ${new Date().toLocaleString()}`
+      observations: 'Test observations'
     };
     
-    console.log('Datos del albarán a crear:');
-    console.log(JSON.stringify(albaranData, null, 2));
+    const result = await AlbaranRepository.create(albaranData);
     
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(albaranData)
-    });
+    // Guardar para usar en otras pruebas
+    testAlbaran = result;
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al crear albarán: ${errorData.error || 'Error desconocido'}`);
-    }
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.number).toBeDefined();
+    expect(result.project.toString()).toBe(testProject._id.toString());
+    expect(result.client.toString()).toBe(testClient._id.toString());
+    expect(result.createdBy).toBe(testUser.email);
+    expect(result.hoursEntries).toHaveLength(1);
+    expect(result.materialEntries).toHaveLength(1);
+    expect(result.observations).toBe('Test observations');
+    expect(result.totalHours).toBe(8);
+    expect(result.totalMaterials).toBe(20);
+    expect(result.totalAmount).toBe(20);
+    expect(result.isSigned).toBe(false);
+    expect(result.status).toBe('draft');
+  });
+  
+  // Prueba para obtener un albarán por ID
+  test('Obtener un albarán por ID', async () => {
+    const result = await AlbaranRepository.getById(testAlbaran._id);
     
-    data = await response.json();
-    albaranId = data._id;
-    
-    console.log('✅ Albarán creado correctamente');
-    console.log(`ID del albarán: ${albaranId}`);
-    console.log(`Número del albarán: ${data.number}`);
-    
-    // 5. Obtener todos los albaranes
-    console.log('\n5. OBTENIENDO LISTA DE ALBARANES');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener albaranes: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log(`✅ Se encontraron ${data.length} albaranes`);
-    
-    // 6. Obtener detalles del albarán creado
-    console.log('\n6. OBTENIENDO DETALLES DEL ALBARÁN CREADO');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes/${albaranId}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener detalles del albarán: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log('✅ Detalles del albarán:');
-    console.log(`Número: ${data.number}`);
-    console.log(`Proyecto: ${data.project ? data.project.titulo : 'No disponible'}`);
-    console.log(`Cliente: ${data.client ? `${data.client.nombre} ${data.client.apellidos}` : 'No disponible'}`);
-    console.log(`Total Horas: ${data.totalHours}`);
-    console.log(`Total Materiales: ${data.totalMaterials.toFixed(2)}€`);
-    console.log(`Total: ${data.totalAmount.toFixed(2)}€`);
-    console.log(`Estado: ${data.status}`);
-    console.log(`Firmado: ${data.isSigned ? 'Sí' : 'No'}`);
-    
-    // 7. Actualizar el albarán (añadir firma)
-    console.log('\n7. ACTUALIZANDO ALBARÁN (FIRMA)');
-    console.log('------------------------------------');
-    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.number).toBe(testAlbaran.number);
+    expect(result.project._id.toString()).toBe(testProject._id.toString());
+    expect(result.client._id.toString()).toBe(testClient._id.toString());
+    expect(result.createdBy).toBe(testUser.email);
+  });
+  
+  // Prueba para actualizar un albarán
+  test('Actualizar un albarán', async () => {
     const updateData = {
-      isSigned: true,
-      signedBy: userEmail,
-      observations: `${data.observations || ''} - Firmado en prueba el ${new Date().toLocaleString()}`
-    };
-    
-    console.log('Datos a actualizar:');
-    console.log(JSON.stringify(updateData, null, 2));
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes/${albaranId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al actualizar albarán: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log('✅ Albarán actualizado correctamente (firmado)');
-    console.log(`Estado: ${data.status}`);
-    console.log(`Firmado por: ${data.signedBy}`);
-    console.log(`Fecha de firma: ${new Date(data.signatureDate).toLocaleString()}`);
-    
-    // 8. Intentar descargar el PDF del albarán
-    console.log('\n8. PROBANDO GENERACIÓN DE PDF');
-    console.log('------------------------------------');
-    
-    console.log('Intentando descargar PDF del albarán...');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes/pdf/${albaranId}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log('❌ Error al generar PDF:', errorText);
-    } else {
-      console.log('✅ PDF generado correctamente');
-      
-      // Guardar el PDF localmente (opcional)
-      const pdfPath = path.join(process.cwd(), `albaran-${data.number || 'test'}.pdf`);
-      const pdfBuffer = await response.buffer();
-      
-      fs.writeFileSync(pdfPath, pdfBuffer);
-      console.log(`✅ PDF guardado localmente en: ${pdfPath}`);
-    }
-    
-    // 9. Intentar eliminar el albarán (debería fallar al estar firmado)
-    console.log('\n9. INTENTANDO ELIMINAR ALBARÁN FIRMADO');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes/${albaranId}`, {
-      method: 'DELETE'
-    });
-    
-    if (response.ok) {
-      const deleteData = await response.json();
-      console.log('Respuesta de eliminación:', deleteData);
-      console.log('❓ La eliminación no debería funcionar en un albarán firmado');
-    } else {
-      const errorData = await response.json();
-      console.log('✅ Error esperado al intentar eliminar un albarán firmado:');
-      console.log(`Error: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    // 10. Crear un segundo albarán (sin firmar) para probar eliminación
-    console.log('\n10. CREANDO ALBARÁN ADICIONAL PARA PRUEBA DE ELIMINACIÓN');
-    console.log('------------------------------------');
-    
-    const albaranData2 = {
-      projectId: projectId,
+      observations: 'Updated observations',
       hoursEntries: [
         {
-          user: userEmail,
+          user: testUser.email,
           hours: 4,
-          description: `Trabajo adicional - ${timestamp}`
+          description: 'Updated hours'
         }
-      ],
-      observations: 'Albarán de prueba para eliminación'
+      ]
     };
     
-    response = await fetchWithCookies(`${BASE_URL}/api/albaranes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(albaranData2)
-    });
+    const result = await AlbaranRepository.update(
+      testAlbaran._id,
+      updateData,
+      testUser.email
+    );
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.log(`❌ Error al crear albarán adicional: ${errorData.error || 'Error desconocido'}`);
-    } else {
-      data = await response.json();
-      const albaran2Id = data._id;
-      
-      console.log('✅ Albarán adicional creado correctamente');
-      console.log(`ID: ${albaran2Id}`);
-      console.log(`Número: ${data.number}`);
-      
-      // 11. Eliminar el albarán adicional (sin firmar)
-      console.log('\n11. ELIMINANDO ALBARÁN ADICIONAL (SIN FIRMAR)');
-      console.log('------------------------------------');
-      
-      response = await fetchWithCookies(`${BASE_URL}/api/albaranes/${albaran2Id}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.log(`❌ Error al eliminar albarán: ${errorData.error || 'Error desconocido'}`);
-      } else {
-        data = await response.json();
-        console.log('✅ Albarán eliminado (cancelado) correctamente');
-        console.log(data);
-      }
-    }
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.observations).toBe('Updated observations');
+    expect(result.hoursEntries).toHaveLength(1);
+    expect(result.hoursEntries[0].hours).toBe(4);
+    expect(result.hoursEntries[0].description).toBe('Updated hours');
+    expect(result.totalHours).toBe(4);
+  });
+  
+  // Prueba para firmar un albarán
+  test('Firmar un albarán', async () => {
+    const updateData = {
+      isSigned: true,
+      signedBy: testUser.email,
+      signatureImage: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    };
     
-    // 12. Cerrar sesión
-    console.log('\n12. CERRANDO SESIÓN');
-    console.log('------------------------------------');
+    const result = await AlbaranRepository.update(
+      testAlbaran._id,
+      updateData,
+      testUser.email
+    );
     
-    response = await fetchWithCookies(`${BASE_URL}/logout`, {
-      method: 'POST'
-    });
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.isSigned).toBe(true);
+    expect(result.signedBy).toBe(testUser.email);
+    expect(result.signatureImage).toBeDefined();
+    expect(result.status).toBe('signed');
+  });
+  
+  // Prueba para generar PDF
+  test('Generar PDF de un albarán firmado', async () => {
+    const result = await AlbaranRepository.generatePdf(
+      testAlbaran._id,
+      testUser.email
+    );
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al cerrar sesión: ${errorData.error || 'Error desconocido'}`);
-    }
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.isSigned).toBe(true);
+  });
+  
+  // Prueba para intentar eliminar un albarán firmado (debe fallar)
+  test('No se puede eliminar un albarán firmado', async () => {
+    await expect(
+      AlbaranRepository.delete(testAlbaran._id, testUser.email)
+    ).rejects.toThrow('No se puede eliminar un albarán que ya ha sido firmado');
+  });
+  
+  // Prueba para crear un segundo albarán (para probar eliminación)
+  test('Crear un segundo albarán para prueba de eliminación', async () => {
+    const albaranData = {
+      projectId: testProject._id.toString(),
+      creatorEmail: testUser.email,
+      hoursEntries: [
+        {
+          user: testUser.email,
+          hours: 2,
+          description: 'Test hours for deletion'
+        }
+      ],
+      observations: 'Test observations for deletion'
+    };
     
-    data = await response.json();
-    console.log('✅ Sesión cerrada correctamente');
-    console.log(data);
+    const result = await AlbaranRepository.create(albaranData);
     
-    console.log('\n====================================');
-    console.log('¡TEST DE ALBARANES COMPLETADO CON ÉXITO!');
-    console.log('====================================');
+    // Guardar ID para la siguiente prueba
+    testAlbaran.secondId = result._id;
     
-  } catch (error) {
-    console.error('\n❌ ERROR DURANTE EL TEST:', error.message);
-  } finally {
-    rl.close();
-  }
-};
-
-// Ejecutar el test
-runTest();
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.isSigned).toBe(false);
+    expect(result.status).toBe('draft');
+  });
+  
+  // Prueba para eliminar un albarán no firmado
+  test('Eliminar un albarán no firmado', async () => {
+    const result = await AlbaranRepository.delete(
+      testAlbaran.secondId,
+      testUser.email
+    );
+    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    
+    // Verificar que se ha marcado como cancelado pero no eliminado
+    const canceledAlbaran = await Albaran.findById(testAlbaran.secondId);
+    expect(canceledAlbaran).toBeDefined();
+    expect(canceledAlbaran.status).toBe('cancelled');
+  });
+  
+  // Prueba para obtener todos los albaranes
+  test('Obtener todos los albaranes', async () => {
+    const result = await AlbaranRepository.getAll();
+    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(2); // Al menos los dos que hemos creado
+  });
+  
+  // Prueba para obtener albaranes por creador
+  test('Obtener albaranes por creador', async () => {
+    const result = await AlbaranRepository.getByCreator(testUser.email);
+    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(2); // Al menos los dos que hemos creado
+    expect(result.every(albaran => albaran.createdBy === testUser.email)).toBe(true);
+  });
+  
+  // Prueba para obtener albaranes por proyecto
+  test('Obtener albaranes por proyecto', async () => {
+    const result = await AlbaranRepository.getByProject(testProject._id);
+    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(2); // Al menos los dos que hemos creado
+    expect(result.every(albaran => 
+      albaran.project._id.toString() === testProject._id.toString() ||
+      albaran.project.toString() === testProject._id.toString()
+    )).toBe(true);
+  });
+  
+  // Prueba para obtener albaranes por cliente
+  test('Obtener albaranes por cliente', async () => {
+    const result = await AlbaranRepository.getByClient(testClient._id);
+    
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(2); // Al menos los dos que hemos creado
+    expect(result.every(albaran => 
+      albaran.client._id.toString() === testClient._id.toString() ||
+      albaran.client.toString() === testClient._id.toString()
+    )).toBe(true);
+  });
+});

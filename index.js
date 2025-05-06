@@ -1,67 +1,93 @@
 import express from 'express';
-import UserRepository from './repositories/UserRepository.js';
-import ClientRepository from './repositories/ClientRepository.js';
-import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-import { createCompany } from './repositories/CompanyRepository.js';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import connectDB from './config/database.js';
-import dotenv from 'dotenv';
-import User from './models/User.js';
-import Company from './models/Company.js';
-import Client from './models/Client.js';
-import ProjectRepository from './repositories/ProjectRepository.js';
-import Project from './models/Project.js';
-import AlbaranRepository from './repositories/AlbaranRepository.js';
-import PDFDocument from 'pdfkit';
 import fs from 'fs';
+import PDFDocument from 'pdfkit';
 
-
-import swaggerUi from 'swagger-ui-express';
-import YAML from 'yamljs';
-
-const swaggerDocument = YAML.load('./swagger.yaml');
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// Configurar las variables de entorno
+// Configuración de variables de entorno
 dotenv.config();
 
 // Obtener el directorio actual
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Conectar a MongoDB
-connectDB();
+// Importación de la conexión a la base de datos
+import connectDB from './config/database.js';
 
+// Importación de modelos
+import User from './models/User.js';
+import Company from './models/Company.js';
+import Client from './models/Client.js';
+import Project from './models/Project.js';
+import Albaran from './models/Albaran.js';
+
+// Importación de repositorios
+import UserRepository from './repositories/UserRepository.js';
+import { createCompany } from './repositories/CompanyRepository.js';
+import ClientRepository from './repositories/ClientRepository.js';
+import ProjectRepository from './repositories/ProjectRepository.js';
+import AlbaranRepository from './repositories/AlbaranRepository.js';
+
+// Importación de swagger para documentación
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+
+// Inicializar Express
 const app = express();
 
-// Configuración
+// Conexión a la base de datos
+connectDB();
+
+// Cargar la documentación de Swagger
+try {
+  const swaggerDocument = YAML.load('./swagger.yaml');
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+} catch (error) {
+  console.error('Error al cargar el archivo swagger.yaml:', error);
+}
+
+// Configuración de Middleware
 app.set('view engine', 'ejs');
 app.use(express.json());
 app.use(cookieParser());
 
-// Rutas
+// Middleware para verificar el token JWT
+function verifyToken(req, res, next) {
+    const token = req.cookies.token;
+    if (!token) {
+        return res.status(401).send({ error: 'No autorizado' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET || 'SECRET_KEY', (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ error: 'No autorizado' });
+        }
+        req.user = decoded;
+        next();
+    });
+}
+
+// Rutas para vistas
 app.get('/', (req, res) => {
-   res.send('inicio');
+   res.send('Inicio de la aplicación');
 });
 
-// Ruta para la página de cambio de contraseña (protegida)
-app.get('/change-password', verifyToken, (req, res) => {
-   res.render('change-password');
-});
-
-// Ruta para la página de login
 app.get('/login-page', (req, res) => {
    res.render('index');
 });
 
-// Ruta para la página de logout/panel de usuario (protegida)
 app.get('/user-panel', verifyToken, (req, res) => {
    res.render('logout');
 });
 
-// Endpoint para obtener información del usuario actual (protegido)
+app.get('/change-password', verifyToken, (req, res) => {
+   res.render('change-password');
+});
+
+// API para usuarios
 app.get('/api/user/info', verifyToken, async (req, res) => {
    try {
       const user = await User.findById(req.user.id, { 
@@ -78,34 +104,14 @@ app.get('/api/user/info', verifyToken, async (req, res) => {
    }
 });
 
-// Usuarios
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        const user = await UserRepository.login({ email, password });
-        const token = jwt.sign(
-            { id: user._id, email: user.email }, 
-            process.env.JWT_SECRET || "SECRET_KEY", 
-            { expiresIn: '1h' }
-        );
-        res.cookie('token', token, { httpOnly: true });
-        res.send({ user, token });
-    } catch (error) {
-        res.status(401).send({ error: error.message });
-    }
-});
-
 app.post('/register', async (req, res) => {
     const { email, password, nombre, apellidos, nif, direccion } = req.body;
-    console.log(req.body);
 
     try {
         const result = await UserRepository.create({ 
             email, password, nombre, apellidos, nif, direccion 
         });
         
-        // En un sistema real, aquí enviarías el código por email
-        // Por ahora, solo devolvemos el código en la respuesta para pruebas
         res.status(201).send({ 
             id: result.id,
             message: 'Usuario registrado. Por favor valida tu cuenta con el código enviado a tu email.',
@@ -142,7 +148,6 @@ app.post('/api/user/resend-code', async (req, res) => {
     
     try {
         const result = await UserRepository.resendValidationCode(email);
-        // En un sistema real, aquí enviarías el código por email
         res.status(200).send({ 
             message: 'Código de validación reenviado',
             validationCode: result.validationCode // En producción, no enviarías esto en la respuesta
@@ -152,7 +157,22 @@ app.post('/api/user/resend-code', async (req, res) => {
     }
 });
 
-// Nuevo endpoint para cambiar la contraseña - Requiere autenticación
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await UserRepository.login({ email, password });
+        const token = jwt.sign(
+            { id: user._id, email: user.email }, 
+            process.env.JWT_SECRET || "SECRET_KEY", 
+            { expiresIn: '1h' }
+        );
+        res.cookie('token', token, { httpOnly: true });
+        res.send({ user, token });
+    } catch (error) {
+        res.status(401).send({ error: error.message });
+    }
+});
+
 app.post('/api/user/change-password', verifyToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     
@@ -182,6 +202,7 @@ app.post('/logout', (req, res) => {
     res.status(200).json({ message: 'Sesión cerrada correctamente' });
 });
 
+// Ruta protegida de ejemplo
 app.get('/protected', verifyToken, async (req, res) => {
     try {
         const users = await User.find({}, { 
@@ -195,23 +216,7 @@ app.get('/protected', verifyToken, async (req, res) => {
     }
 });
 
-// Middleware para verificar el token
-function verifyToken(req, res, next) {
-    const token = req.cookies.token;
-    if (!token) {
-        return res.status(401).send({ error: 'No autorizado' });
-    }
-
-    jwt.verify(token, process.env.JWT_SECRET || 'SECRET_KEY', (err, decoded) => {
-        if (err) {
-            return res.status(401).send({ error: 'No autorizado' });
-        }
-        req.user = decoded;
-        next();
-    });
-}
-
-// Compañía
+// API para compañías
 app.post('/companies/create', async (req, res) => {
     const { emailJefe, nif, nombre, miembros } = req.body;
 
@@ -223,7 +228,6 @@ app.post('/companies/create', async (req, res) => {
     }
 });
 
-// Endpoint para listar compañías disponibles para el usuario actual
 app.get('/api/companies', verifyToken, async (req, res) => {
     try {
         // Buscar compañías donde el usuario es jefe o miembro
@@ -240,9 +244,7 @@ app.get('/api/companies', verifyToken, async (req, res) => {
     }
 });
 
-// ===== INICIO NUEVOS ENDPOINTS PARA CLIENTES =====
-
-// Endpoint para crear un cliente (protegido)
+// API para clientes
 app.post('/api/clients', verifyToken, async (req, res) => {
     try {
         const { nombre, apellidos, email, telefono, nif, direccion, companiaId } = req.body;
@@ -264,7 +266,6 @@ app.post('/api/clients', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para listar todos los clientes (protegido)
 app.get('/api/clients', verifyToken, async (req, res) => {
     try {
         const clients = await ClientRepository.getAll();
@@ -274,7 +275,6 @@ app.get('/api/clients', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para listar clientes creados por el usuario actual (protegido)
 app.get('/api/clients/me', verifyToken, async (req, res) => {
     try {
         const clients = await ClientRepository.getByCreador(req.user.email);
@@ -284,7 +284,6 @@ app.get('/api/clients/me', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para obtener un cliente por ID (protegido)
 app.get('/api/clients/:id', verifyToken, async (req, res) => {
     try {
         const client = await ClientRepository.getById(req.params.id);
@@ -297,7 +296,6 @@ app.get('/api/clients/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para actualizar un cliente (protegido)
 app.put('/api/clients/:id', verifyToken, async (req, res) => {
     try {
         const updateData = req.body;
@@ -312,7 +310,6 @@ app.put('/api/clients/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para eliminar un cliente (protegido)
 app.delete('/api/clients/:id', verifyToken, async (req, res) => {
     try {
         const result = await ClientRepository.delete(req.params.id, req.user.email);
@@ -322,7 +319,6 @@ app.delete('/api/clients/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint similar a /protected pero para clientes
 app.get('/clients-protected', verifyToken, async (req, res) => {
     try {
         const clients = await ClientRepository.getAll();
@@ -332,11 +328,7 @@ app.get('/clients-protected', verifyToken, async (req, res) => {
     }
 });
 
-// ===== FIN NUEVOS ENDPOINTS PARA CLIENTES =====
-
-// ===== INICIO NUEVOS ENDPOINTS PARA PROYECTOS =====
-
-// Endpoint para crear un proyecto (protegido)
+// API para proyectos
 app.post('/api/projects', verifyToken, async (req, res) => {
     try {
         const { titulo, descripcion, fechaInicio, fechaFin, estado, presupuesto, clienteId, companiaId } = req.body;
@@ -360,7 +352,6 @@ app.post('/api/projects', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para listar todos los proyectos (protegido)
 app.get('/api/projects', verifyToken, async (req, res) => {
     try {
         const projects = await ProjectRepository.getAll();
@@ -371,7 +362,6 @@ app.get('/api/projects', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para listar proyectos creados por el usuario actual (protegido)
 app.get('/api/projects/me', verifyToken, async (req, res) => {
     try {
         const projects = await ProjectRepository.getByCreador(req.user.email);
@@ -382,7 +372,6 @@ app.get('/api/projects/me', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para obtener proyectos por cliente (protegido)
 app.get('/api/projects/client/:clientId', verifyToken, async (req, res) => {
     try {
         const projects = await ProjectRepository.getByCliente(req.params.clientId);
@@ -393,7 +382,6 @@ app.get('/api/projects/client/:clientId', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para obtener un proyecto por ID (protegido)
 app.get('/api/projects/:id', verifyToken, async (req, res) => {
     try {
         const project = await ProjectRepository.getById(req.params.id);
@@ -407,7 +395,6 @@ app.get('/api/projects/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para actualizar un proyecto (protegido)
 app.put('/api/projects/:id', verifyToken, async (req, res) => {
     try {
         const updateData = req.body;
@@ -423,7 +410,6 @@ app.put('/api/projects/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint para eliminar un proyecto (protegido)
 app.delete('/api/projects/:id', verifyToken, async (req, res) => {
     try {
         const result = await ProjectRepository.delete(req.params.id, req.user.email);
@@ -434,7 +420,6 @@ app.delete('/api/projects/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Endpoint similar a /protected pero para proyectos
 app.get('/projects-protected', verifyToken, async (req, res) => {
     try {
         const projects = await ProjectRepository.getAll();
@@ -445,11 +430,7 @@ app.get('/projects-protected', verifyToken, async (req, res) => {
     }
 });
 
-// ===== FIN NUEVOS ENDPOINTS PARA PROYECTOS =====
-
-// ===== INICIO NUEVOS ENDPOINTS PARA ALBARANES =====
-
-// Endpoint para crear un albarán (protegido)
+// API para albaranes
 app.post('/api/albaranes', verifyToken, async (req, res) => {
   try {
     const { projectId, hoursEntries, materialEntries, observations } = req.body;
@@ -469,7 +450,6 @@ app.post('/api/albaranes', verifyToken, async (req, res) => {
   }
 });
 
-// Endpoint para listar todos los albaranes (protegido)
 app.get('/api/albaranes', verifyToken, async (req, res) => {
   try {
     const albaranes = await AlbaranRepository.getAll();
@@ -480,7 +460,6 @@ app.get('/api/albaranes', verifyToken, async (req, res) => {
   }
 });
 
-// Endpoint para obtener un albarán por ID (protegido)
 app.get('/api/albaranes/:id', verifyToken, async (req, res) => {
   try {
     const albaran = await AlbaranRepository.getById(req.params.id);
@@ -504,6 +483,21 @@ app.get('/api/albaranes/pdf/:id', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Solo se pueden generar PDFs de albaranes firmados' });
     }
     
+    // Verificar si ya existe un PDF generado
+    if (albaran.pdfUrl && fs.existsSync(albaran.pdfUrl)) {
+      // Enviar el archivo PDF existente
+      return res.download(albaran.pdfUrl);
+    }
+    
+    // Si no hay PDF o no existe el archivo, generar uno nuevo
+    const pdfPath = `pdfs/albaran-${albaran.number.replace(/\//g, '-')}.pdf`;
+    const fullPath = path.join(__dirname, pdfPath);
+    
+    // Crear directorio si no existe
+    if (!fs.existsSync(path.join(__dirname, 'pdfs'))) {
+      fs.mkdirSync(path.join(__dirname, 'pdfs'), { recursive: true });
+    }
+    
     // Crear un nuevo documento PDF
     const doc = new PDFDocument({ margin: 50 });
     
@@ -511,124 +505,26 @@ app.get('/api/albaranes/pdf/:id', verifyToken, async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=albaran-${albaran.number}.pdf`);
     
-    // Enviar el PDF directamente al response
+    // Pipe al archivo y a la respuesta
+    const writeStream = fs.createWriteStream(fullPath);
+    doc.pipe(writeStream);
     doc.pipe(res);
     
-    // Añadir contenido al PDF
-    
-    // Título y número de albarán
-    doc.fontSize(20).text(`ALBARÁN ${albaran.number}`, { align: 'center' });
-    doc.moveDown();
-    
-    // Fecha
-    doc.fontSize(12).text(`Fecha: ${new Date(albaran.date).toLocaleDateString()}`, { align: 'right' });
-    doc.moveDown();
-    
-    // Información del cliente
-    doc.fontSize(14).text('DATOS DEL CLIENTE', { underline: true });
-    doc.fontSize(12).text(`Nombre: ${albaran.client.nombre} ${albaran.client.apellidos}`);
-    doc.text(`NIF: ${albaran.client.nif}`);
-    doc.text(`Dirección: ${albaran.client.direccion}`);
-    doc.text(`Email: ${albaran.client.email}`);
-    doc.text(`Teléfono: ${albaran.client.telefono}`);
-    doc.moveDown();
-    
-    // Información del proyecto
-    doc.fontSize(14).text('DATOS DEL PROYECTO', { underline: true });
-    doc.fontSize(12).text(`Título: ${albaran.project.titulo}`);
-    doc.text(`Descripción: ${albaran.project.descripcion}`);
-    doc.text(`Estado: ${albaran.project.estado}`);
-    doc.moveDown();
-    
-    // Información del creador del albarán
-    doc.fontSize(14).text('EMITIDO POR', { underline: true });
-    if (albaran.creatorDetails) {
-      doc.fontSize(12).text(`Nombre: ${albaran.creatorDetails.nombre} ${albaran.creatorDetails.apellidos}`);
-      doc.text(`Email: ${albaran.creatorDetails.email}`);
-    } else {
-      doc.fontSize(12).text(`Email: ${albaran.createdBy}`);
-    }
-    doc.moveDown();
-    
-    // Detalles de horas trabajadas si existen
-    if (albaran.hoursEntries && albaran.hoursEntries.length > 0) {
-      doc.fontSize(14).text('HORAS TRABAJADAS', { underline: true });
-      doc.moveDown(0.5);
-      
-      // Tabla de horas
-      albaran.hoursEntries.forEach((entry, index) => {
-        const userName = entry.userDetails ? 
-          `${entry.userDetails.nombre} ${entry.userDetails.apellidos}` : 
-          entry.user;
-          
-        doc.fontSize(11).text(`${index + 1}. ${userName} - ${entry.hours} horas`, { continued: true });
-        doc.text(`   Fecha: ${new Date(entry.date).toLocaleDateString()}`, { align: 'right' });
-        doc.fontSize(10).text(`   Descripción: ${entry.description}`);
-        doc.moveDown(0.5);
-      });
-      
-      doc.fontSize(12).text(`Total horas: ${albaran.totalHours}`, { align: 'right' });
-      doc.moveDown();
-    }
-    
-    // Detalles de materiales si existen
-    if (albaran.materialEntries && albaran.materialEntries.length > 0) {
-      doc.fontSize(14).text('MATERIALES', { underline: true });
-      doc.moveDown(0.5);
-      
-      // Tabla de materiales
-      albaran.materialEntries.forEach((entry, index) => {
-        doc.fontSize(11).text(`${index + 1}. ${entry.name} - Cantidad: ${entry.quantity}`, { continued: true });
-        doc.text(`   Precio: ${entry.unitPrice.toFixed(2)}€`, { align: 'right' });
-        if (entry.description) {
-          doc.fontSize(10).text(`   Descripción: ${entry.description}`);
-        }
-        doc.fontSize(11).text(`   Subtotal: ${entry.totalPrice.toFixed(2)}€`, { align: 'right' });
-        doc.moveDown(0.5);
-      });
-      
-      doc.fontSize(12).text(`Total materiales: ${albaran.totalMaterials.toFixed(2)}€`, { align: 'right' });
-      doc.moveDown();
-    }
-    
-    // Total general
-    doc.fontSize(16).text(`TOTAL: ${albaran.totalAmount.toFixed(2)}€`, { align: 'right' });
-    doc.moveDown();
-    
-    // Observaciones si existen
-    if (albaran.observations) {
-      doc.fontSize(14).text('OBSERVACIONES', { underline: true });
-      doc.fontSize(12).text(albaran.observations);
-      doc.moveDown();
-    }
-    
-    // Información de firma
-    doc.fontSize(14).text('FIRMA', { underline: true });
-    doc.fontSize(12).text(`Firmado por: ${albaran.signedBy}`);
-    doc.text(`Fecha de firma: ${new Date(albaran.signatureDate).toLocaleDateString()}`);
-    
-    // Añadir imagen de firma si existe
-    if (albaran.signatureImage) {
-      try {
-        // Si es una URL o base64, habría que adaptarlo
-        doc.image(albaran.signatureImage, { width: 200 });
-      } catch (error) {
-        console.error('Error al cargar la imagen de firma:', error);
-        doc.text('Firma digital verificada');
-      }
-    } else {
-      doc.text('Firma digital verificada');
-    }
+    // Generar contenido PDF
+    AlbaranRepository.generatePdfContent(doc, albaran);
     
     // Finalizar el documento
     doc.end();
+    
+    // Actualizar URL del PDF en la base de datos
+    await Albaran.findByIdAndUpdate(req.params.id, { pdfUrl: fullPath });
+    
   } catch (error) {
     console.error('Error al generar PDF del albarán:', error);
     res.status(500).json({ error: 'Error al generar el PDF del albarán' });
   }
 });
 
-// Endpoint para actualizar un albarán (protegido)
 app.put('/api/albaranes/:id', verifyToken, async (req, res) => {
   try {
     const updateData = req.body;
@@ -644,7 +540,6 @@ app.put('/api/albaranes/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Endpoint para eliminar (cancelar) un albarán (protegido)
 app.delete('/api/albaranes/:id', verifyToken, async (req, res) => {
   try {
     const result = await AlbaranRepository.delete(req.params.id, req.user.email);
@@ -654,8 +549,6 @@ app.delete('/api/albaranes/:id', verifyToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-
-// ===== FIN NUEVOS ENDPOINTS PARA ALBARANES =====
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;

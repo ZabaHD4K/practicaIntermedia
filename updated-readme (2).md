@@ -1,16 +1,30 @@
-# Proyecto de Gestión Empresarial
+# API de Gestión de Albaranes
 
-Este proyecto es una aplicación completa para la gestión empresarial construida con **Node.js** y **Express.js** que permite administrar usuarios, compañías, clientes, proyectos y albaranes, utilizando **MongoDB** como base de datos. Incluye funcionalidades como registro, autenticación con JWT, gestión de permisos y generación de documentos PDF.
+Este proyecto implementa una API RESTful para la gestión de albaranes (partes de horas o materiales) entre clientes y proveedores, desarrollada con Node.js, Express y MongoDB.
 
-## Requisitos Previos
+## Índice
+1. [Requisitos previos](#requisitos-previos)
+2. [Instalación](#instalación)
+3. [Configuración](#configuración)
+4. [Pruebas de funcionalidad](#pruebas-de-funcionalidad)
+   - [1. Registro y autenticación de usuarios](#1-registro-y-autenticación-de-usuarios)
+   - [2. Gestión de compañías](#2-gestión-de-compañías)
+   - [3. Gestión de clientes](#3-gestión-de-clientes)
+   - [4. Gestión de proyectos](#4-gestión-de-proyectos)
+   - [5. Gestión de albaranes](#5-gestión-de-albaranes)
+   - [6. Generación de PDFs](#6-generación-de-pdfs)
+5. [Pruebas automatizadas](#pruebas-automatizadas)
+6. [Documentación de la API](#documentación-de-la-api)
 
-- Node.js (versión 14 o superior)
-- MongoDB Atlas (cuenta en la nube) o MongoDB instalado localmente
-- npm (para instalar las dependencias)
+## Requisitos previos
+
+- Node.js (versión 14.0.0 o superior)
+- MongoDB (local o MongoDB Atlas)
+- npm o yarn
 
 ## Instalación
 
-1. Clona este repositorio en tu máquina local:
+1. Clona este repositorio:
    ```bash
    git clone <url-del-repositorio>
    cd <nombre-del-directorio>
@@ -21,339 +35,418 @@ Este proyecto es una aplicación completa para la gestión empresarial construid
    npm install
    ```
 
-3. Configura las variables de entorno:
-   - Crea un archivo `.env` en la raíz del proyecto
-   - Agrega las siguientes variables:
-     ```
-     MONGODB_URI=mongodb+srv://<usuario>:<contraseña>@<cluster>.mongodb.net/<basededatos>?retryWrites=true&w=majority
-     JWT_SECRET=tuclavesecretaparajwt
-     ```
-
-4. Inicia el servidor:
-   ```bash
-   npm run dev
+3. Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
+   ```
+   PORT=3000
+   MONGODB_URI=mongodb://localhost:27017/albaranes-api
+   JWT_SECRET=tu_clave_secreta_para_jwt
    ```
 
-   El servidor estará disponible en http://localhost:3000.
+## Configuración
 
-## Estructura del Proyecto
+Asegúrate de configurar correctamente la conexión a MongoDB:
+- Para MongoDB local: `MONGODB_URI=mongodb://localhost:27017/albaranes-api`
+- Para MongoDB Atlas: `MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority`
 
-```
-├── config
-│   └── database.js          # Configuración de conexión a MongoDB
-├── models
-│   ├── User.js              # Modelo de usuario
-│   ├── Company.js           # Modelo de compañía
-│   ├── Client.js            # Modelo de cliente
-│   ├── Project.js           # Modelo de proyecto
-│   └── Albaran.js           # Modelo de albarán
-├── repositories
-│   ├── UserRepository.js    # Lógica de negocio para usuarios
-│   ├── CompanyRepository.js # Lógica de negocio para compañías
-│   ├── ClientRepository.js  # Lógica de negocio para clientes
-│   ├── ProjectRepository.js # Lógica de negocio para proyectos
-│   └── AlbaranRepository.js # Lógica de negocio para albaranes
-├── views                    # Plantillas EJS
-│   ├── index.ejs            # Página de login y registro
-│   ├── logout.ejs           # Panel de usuario
-│   ├── change-password.ejs  # Formulario para cambiar contraseña
-│   ├── clients.ejs          # Vista de gestión de clientes
-│   └── projects.ejs         # Vista de gestión de proyectos
-├── test.js                  # Script de prueba básico
-├── test-clients.js          # Script de prueba para clientes
-├── test-projects.js         # Script de prueba para proyectos
-├── test-albaranes.js        # Script de prueba para albaranes
-├── .env                     # Variables de entorno (no incluido en git)
-├── index.js                 # Punto de entrada de la aplicación
-└── package.json             # Dependencias y scripts
-```
+## Pruebas de funcionalidad
 
-## Base de Datos
+A continuación se describe cómo probar cada una de las funcionalidades requeridas en la práctica. Puedes usar herramientas como Postman, Insomnia o la extensión REST Client de VS Code para realizar las pruebas.
 
-Este proyecto utiliza MongoDB como base de datos. Se puede usar:
+### 1. Registro y autenticación de usuarios
 
-- **MongoDB Atlas**: Servicio de base de datos en la nube (recomendado)
-- **MongoDB Local**: Instalación local de MongoDB
+#### 1.1 Registro de usuario
+```http
+POST http://localhost:3000/register
+Content-Type: application/json
 
-### Modelos de Datos
-
-#### Usuario
-- email (único)
-- password (encriptado)
-- nombre
-- apellidos
-- nif
-- direccion
-- isValidated (indica si la cuenta está validada)
-- validationCode y validationCodeExpires (para validación de cuenta)
-
-#### Compañía
-- nif (único)
-- nombre
-- miembros (array de emails)
-- jefe (email del jefe)
-
-#### Cliente
-- nombre, apellidos
-- email (único)
-- telefono
-- nif (único)
-- direccion
-- creador (referencia al usuario que lo creó)
-- compania (referencia opcional a una compañía)
-- activo (para borrado lógico)
-
-#### Proyecto
-- titulo
-- descripcion
-- fechaInicio, fechaFin
-- estado (Pendiente, En progreso, Completado, Cancelado)
-- presupuesto
-- cliente (referencia al cliente)
-- compania (referencia opcional a una compañía)
-- creador (referencia al usuario que lo creó)
-- activo (para borrado lógico)
-
-#### Albarán
-- number (número único de albarán generado automáticamente)
-- project (referencia al proyecto)
-- client (referencia al cliente)
-- createdBy (referencia al usuario que lo creó)
-- date (fecha de creación)
-- hoursEntries (array de registros de horas)
-  - user (email del usuario)
-  - hours (cantidad de horas)
-  - description (descripción del trabajo)
-  - date (fecha del trabajo)
-- materialEntries (array de registros de materiales)
-  - name (nombre del material)
-  - quantity (cantidad)
-  - unitPrice (precio unitario)
-  - totalPrice (precio total)
-  - description (descripción opcional)
-- observations (observaciones generales)
-- totalHours (calculado automáticamente)
-- totalMaterials (calculado automáticamente)
-- totalAmount (calculado automáticamente)
-- isSigned, signatureDate, signedBy (para el firmado del albarán)
-- signatureImage (URL o datos de la imagen de firma)
-- status (draft, pending, signed, cancelled)
-
-## Funcionalidades Principales
-
-### Gestión de Usuarios
-- Registro de usuarios
-- Validación por código de verificación
-- Login/Logout con JWT
-- Cambio de contraseña
-- Perfil de usuario
-
-### Gestión de Compañías
-- Creación de compañías con jefe y miembros
-- Asignación de permisos basados en roles (jefe, miembro)
-- Visualización de compañías asociadas
-
-### Gestión de Clientes
-- CRUD completo de clientes
-- Asociación a compañías
-- Filtrado por creador o compañía
-
-### Gestión de Proyectos
-- CRUD completo de proyectos
-- Asignación a clientes y compañías
-- Control de fechas y estado
-- Gestión de presupuestos
-
-### Gestión de Albaranes
-- Creación de albaranes para proyectos
-- Registro de horas trabajadas
-- Registro de materiales utilizados
-- Firmado de albaranes
-- Generación de PDF de albaranes
-
-## API Endpoints
-
-### Endpoints de Usuarios
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/` | Página de inicio |
-| GET | `/login-page` | Página de login |
-| GET | `/user-panel` | Panel de usuario (protegido) |
-| GET | `/change-password` | Página de cambio de contraseña (protegido) |
-| GET | `/api/user/info` | Obtener información del usuario actual (protegido) |
-| POST | `/login` | Iniciar sesión |
-| POST | `/register` | Registrar nuevo usuario |
-| PUT | `/api/user/validation` | Validar cuenta de usuario |
-| POST | `/api/user/resend-code` | Reenviar código de validación |
-| POST | `/api/user/change-password` | Cambiar contraseña (protegido) |
-| POST | `/logout` | Cerrar sesión |
-| GET | `/protected` | Ruta protegida de ejemplo |
-
-### Endpoints de Compañías
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/companies/create` | Crear nueva compañía |
-| GET | `/api/companies` | Listar compañías del usuario (protegido) |
-
-### Endpoints de Clientes
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/api/clients` | Crear nuevo cliente (protegido) |
-| GET | `/api/clients` | Listar todos los clientes (protegido) |
-| GET | `/api/clients/me` | Listar clientes creados por el usuario (protegido) |
-| GET | `/api/clients/:id` | Obtener cliente por ID (protegido) |
-| PUT | `/api/clients/:id` | Actualizar cliente (protegido) |
-| DELETE | `/api/clients/:id` | Eliminar cliente (protegido) |
-| GET | `/clients-protected` | Vista de clientes (protegido) |
-
-### Endpoints de Proyectos
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/api/projects` | Crear nuevo proyecto (protegido) |
-| GET | `/api/projects` | Listar todos los proyectos (protegido) |
-| GET | `/api/projects/me` | Listar proyectos creados por el usuario (protegido) |
-| GET | `/api/projects/client/:clientId` | Listar proyectos por cliente (protegido) |
-| GET | `/api/projects/:id` | Obtener proyecto por ID (protegido) |
-| PUT | `/api/projects/:id` | Actualizar proyecto (protegido) |
-| DELETE | `/api/projects/:id` | Eliminar proyecto (protegido) |
-| GET | `/projects-protected` | Vista de proyectos (protegido) |
-
-### Endpoints de Albaranes
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/api/albaranes` | Crear nuevo albarán (protegido) |
-| GET | `/api/albaranes` | Listar todos los albaranes (protegido) |
-| GET | `/api/albaranes/:id` | Obtener albarán por ID (protegido) |
-| GET | `/api/albaranes/pdf/:id` | Generar PDF del albarán (protegido) |
-| PUT | `/api/albaranes/:id` | Actualizar albarán (protegido) |
-| DELETE | `/api/albaranes/:id` | Eliminar/cancelar albarán (protegido) |
-
-## Reglas de Negocio
-
-### Usuarios
-- Las contraseñas se almacenan encriptadas
-- Los usuarios deben validar su cuenta con un código antes de usar la aplicación
-- El sistema usa JWT para mantener la sesión
-
-### Compañías
-- Una compañía tiene un jefe y puede tener múltiples miembros
-- Solo el jefe puede realizar ciertas acciones administrativas
-
-### Clientes
-- Un cliente puede estar asociado a una compañía
-- Los clientes pueden ser gestionados por cualquier miembro de la compañía asociada
-
-### Proyectos
-- Un proyecto siempre está asociado a un cliente
-- Opcionalmente puede estar asociado a una compañía
-- Los proyectos tienen un ciclo de vida con diferentes estados
-
-### Albaranes
-- Un albarán está siempre asociado a un proyecto
-- Puede contener registros de horas, materiales o ambos
-- Una vez firmado, no se puede modificar ni eliminar
-- Solo se pueden generar PDFs de albaranes firmados
-
-## Pruebas (Tests)
-
-El proyecto incluye varios scripts de prueba para verificar el funcionamiento de la API:
-
-### Test básico
-```bash
-node test.js
-```
-Prueba el registro, validación, login y creación de compañía.
-
-### Test de clientes
-```bash
-node test-clients.js
-```
-Prueba la creación, lectura, actualización y eliminación de clientes.
-
-### Test de proyectos
-```bash
-node test-projects.js
-```
-Prueba la creación, lectura, actualización y eliminación de proyectos.
-
-### Test de albaranes
-```bash
-node test-albaranes.js
-```
-Prueba la creación, lectura, actualización, firmado, generación de PDF y eliminación de albaranes.
-
-## Autenticación y Seguridad
-
-### JWT (JSON Web Tokens)
-- Al iniciar sesión, se genera un token JWT que se almacena en una cookie HTTP-only
-- El token contiene el ID y email del usuario
-- Todas las rutas protegidas verifican la validez del token
-- Al cerrar sesión, la cookie se elimina
-
-### Middleware de verificación
-```javascript
-function verifyToken(req, res, next) {
-    const token = req.cookies.token;
-    if (!token) {
-        return res.status(401).send({ error: 'No autorizado' });
-    }
-
-    jwt.verify(token, process.env.JWT_SECRET || 'SECRET_KEY', (err, decoded) => {
-        if (err) {
-            return res.status(401).send({ error: 'No autorizado' });
-        }
-        req.user = decoded;
-        next();
-    });
+{
+  "email": "usuario@ejemplo.com",
+  "password": "contraseña123",
+  "nombre": "Usuario",
+  "apellidos": "De Prueba",
+  "nif": "12345678Z",
+  "direccion": "Calle de Prueba, 123"
 }
 ```
 
-## Generación de PDF
+**Comprobar**: La respuesta debe incluir un mensaje de éxito, el ID del usuario y un código de validación.
 
-El sistema utiliza la librería PDFKit para generar documentos PDF de los albaranes firmados.
+#### 1.2 Validación de usuario
+```http
+PUT http://localhost:3000/api/user/validation
+Content-Type: application/json
 
-```javascript
-// Instalar PDFKit
-npm install pdfkit
+{
+  "email": "usuario@ejemplo.com",
+  "code": "123456" // Usar el código recibido en la respuesta anterior
+}
 ```
 
-La generación del PDF incluye:
-- Información del cliente
-- Información del proyecto
-- Detalles de horas trabajadas
-- Detalles de materiales utilizados
-- Observaciones
-- Firma y datos de validación
+**Comprobar**: La respuesta debe indicar que el usuario ha sido validado correctamente.
 
-## Dependencias Principales
+#### 1.3 Login
+```http
+POST http://localhost:3000/login
+Content-Type: application/json
 
-- **express**: Framework para construir la API
-- **mongoose**: ODM para interactuar con MongoDB
-- **jsonwebtoken**: Para generar y verificar tokens JWT
-- **bcrypt**: Para encriptar contraseñas
-- **cookie-parser**: Para manejar cookies
-- **dotenv**: Para manejar variables de entorno
-- **ejs**: Motor de plantillas para las vistas
-- **pdfkit**: Para generar documentos PDF
+{
+  "email": "usuario@ejemplo.com",
+  "password": "contraseña123"
+}
+```
 
-## Posibles Mejoras
+**Comprobar**: La respuesta debe incluir los datos del usuario y un token JWT. Guarda este token para usarlo en las siguientes peticiones.
 
-1. Implementar sistema de roles más completo
-2. Añadir validación más robusta en todas las entradas
-3. Implementar tests unitarios y de integración automatizados
-4. Mejorar el manejo de errores y logging
-5. Añadir generación de reportes y estadísticas
-6. Implementar un frontend más completo (React, Angular, Vue)
-7. Añadir sistema de notificaciones
+#### 1.4 Obtener información del usuario
+```http
+GET http://localhost:3000/api/user/info
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
 
-## Notas Finales
+**Comprobar**: La respuesta debe mostrar la información del usuario sin datos sensibles como la contraseña.
 
-- Cambia la clave secreta (JWT_SECRET) en el archivo `.env` por una más segura antes de usar en producción
-- Configura correctamente las restricciones de IP en MongoDB Atlas
-- No compartas ni incluyas el archivo `.env` en tu repositorio
-- Para entornos de producción, considera implementar HTTPS
+#### 1.5 Cambiar contraseña
+```http
+POST http://localhost:3000/api/user/change-password
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "currentPassword": "contraseña123",
+  "newPassword": "nuevaContraseña123"
+}
+```
+
+**Comprobar**: La respuesta debe indicar que la contraseña ha sido cambiada correctamente.
+
+#### 1.6 Logout
+```http
+POST http://localhost:3000/logout
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe indicar que la sesión ha sido cerrada correctamente. Inicia sesión nuevamente para continuar con las pruebas.
+
+### 2. Gestión de compañías
+
+#### 2.1 Crear compañía
+```http
+POST http://localhost:3000/companies/create
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "emailJefe": "usuario@ejemplo.com",
+  "nif": "B12345678",
+  "nombre": "Compañía de Prueba S.L.",
+  "miembros": ["usuario@ejemplo.com"]
+}
+```
+
+**Comprobar**: La respuesta debe incluir los datos de la compañía creada, incluyendo su ID.
+
+#### 2.2 Obtener compañías asociadas al usuario
+```http
+GET http://localhost:3000/api/companies
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar las compañías donde el usuario es jefe o miembro.
+
+### 3. Gestión de clientes
+
+#### 3.1 Crear cliente
+```http
+POST http://localhost:3000/api/clients
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "nombre": "Cliente",
+  "apellidos": "De Prueba",
+  "email": "cliente@ejemplo.com",
+  "telefono": "666777888",
+  "nif": "98765432X",
+  "direccion": "Calle Cliente, 456",
+  "companiaId": "<id_de_la_compañía>"
+}
+```
+
+**Comprobar**: La respuesta debe incluir los datos del cliente creado, incluyendo su ID.
+
+#### 3.2 Obtener todos los clientes
+```http
+GET http://localhost:3000/api/clients
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar la lista de clientes activos.
+
+#### 3.3 Obtener clientes creados por el usuario
+```http
+GET http://localhost:3000/api/clients/me
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar solo los clientes creados por el usuario autenticado.
+
+#### 3.4 Obtener cliente por ID
+```http
+GET http://localhost:3000/api/clients/<id_del_cliente>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar los datos del cliente específico.
+
+#### 3.5 Actualizar cliente
+```http
+PUT http://localhost:3000/api/clients/<id_del_cliente>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "telefono": "999888777",
+  "direccion": "Nueva Dirección, 789"
+}
+```
+
+**Comprobar**: La respuesta debe mostrar los datos del cliente actualizados.
+
+#### 3.6 Eliminar cliente (soft delete)
+```http
+DELETE http://localhost:3000/api/clients/<id_del_cliente>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe indicar que el cliente ha sido eliminado correctamente. Verifica que ya no aparece en el listado de clientes activos.
+
+### 4. Gestión de proyectos
+
+#### 4.1 Crear proyecto
+```http
+POST http://localhost:3000/api/projects
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "titulo": "Proyecto de Prueba",
+  "descripcion": "Este es un proyecto de prueba para probar la API",
+  "fechaInicio": "2023-06-01",
+  "fechaFin": "2023-12-31",
+  "estado": "En progreso",
+  "presupuesto": 5000,
+  "clienteId": "<id_del_cliente>",
+  "companiaId": "<id_de_la_compañía>"
+}
+```
+
+**Comprobar**: La respuesta debe incluir los datos del proyecto creado, incluyendo su ID.
+
+#### 4.2 Obtener todos los proyectos
+```http
+GET http://localhost:3000/api/projects
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar la lista de proyectos activos.
+
+#### 4.3 Obtener proyectos creados por el usuario
+```http
+GET http://localhost:3000/api/projects/me
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar solo los proyectos creados por el usuario autenticado.
+
+#### 4.4 Obtener proyectos por cliente
+```http
+GET http://localhost:3000/api/projects/client/<id_del_cliente>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar solo los proyectos asociados al cliente especificado.
+
+#### 4.5 Obtener proyecto por ID
+```http
+GET http://localhost:3000/api/projects/<id_del_proyecto>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar los datos del proyecto específico.
+
+#### 4.6 Actualizar proyecto
+```http
+PUT http://localhost:3000/api/projects/<id_del_proyecto>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "estado": "Completado",
+  "presupuesto": 6000
+}
+```
+
+**Comprobar**: La respuesta debe mostrar los datos del proyecto actualizados.
+
+#### 4.7 Eliminar proyecto (soft delete)
+```http
+DELETE http://localhost:3000/api/projects/<id_del_proyecto>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe indicar que el proyecto ha sido eliminado correctamente. Verifica que ya no aparece en el listado de proyectos activos.
+
+### 5. Gestión de albaranes
+
+#### 5.1 Crear albarán
+```http
+POST http://localhost:3000/api/albaranes
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "projectId": "<id_del_proyecto>",
+  "hoursEntries": [
+    {
+      "user": "usuario@ejemplo.com",
+      "hours": 8,
+      "description": "Desarrollo de funcionalidades"
+    }
+  ],
+  "materialEntries": [
+    {
+      "name": "Material de oficina",
+      "quantity": 2,
+      "unitPrice": 15.5,
+      "totalPrice": 31
+    }
+  ],
+  "observations": "Este es un albarán de prueba"
+}
+```
+
+**Comprobar**: La respuesta debe incluir los datos del albarán creado, incluyendo su ID y número único.
+
+#### 5.2 Obtener todos los albaranes
+```http
+GET http://localhost:3000/api/albaranes
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar la lista de albaranes.
+
+#### 5.3 Obtener albarán por ID
+```http
+GET http://localhost:3000/api/albaranes/<id_del_albaran>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe mostrar los datos del albarán específico, incluyendo información del cliente, proyecto y entradas de horas y materiales.
+
+#### 5.4 Firmar albarán
+```http
+PUT http://localhost:3000/api/albaranes/<id_del_albaran>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "isSigned": true,
+  "signedBy": "usuario@ejemplo.com",
+  "signatureImage": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+}
+```
+
+**Comprobar**: La respuesta debe mostrar el albarán actualizado con los datos de firma y el estado cambiado a "signed".
+
+### 6. Generación de PDFs
+
+#### 6.1 Generar PDF de albarán firmado
+```http
+GET http://localhost:3000/api/albaranes/pdf/<id_del_albaran>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe ser un archivo PDF descargable con toda la información del albarán, incluyendo datos del cliente, proyecto, horas, materiales y firma.
+
+#### 6.2 Intentar generar PDF de albarán no firmado
+```http
+# Primero crea un nuevo albarán sin firmarlo
+POST http://localhost:3000/api/albaranes
+Cookie: token=<token_jwt_obtenido_en_el_login>
+Content-Type: application/json
+
+{
+  "projectId": "<id_del_proyecto>",
+  "hoursEntries": [
+    {
+      "user": "usuario@ejemplo.com",
+      "hours": 4,
+      "description": "Trabajo adicional"
+    }
+  ],
+  "observations": "Albarán sin firmar"
+}
+```
+
+```http
+# Luego intenta generar el PDF
+GET http://localhost:3000/api/albaranes/pdf/<id_del_nuevo_albaran>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe ser un error indicando que solo se pueden generar PDFs de albaranes firmados.
+
+#### 6.3 Eliminar albarán
+
+##### 6.3.1 Intentar eliminar albarán firmado
+```http
+DELETE http://localhost:3000/api/albaranes/<id_del_albaran_firmado>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe ser un error indicando que no se puede eliminar un albarán que ya ha sido firmado.
+
+##### 6.3.2 Eliminar albarán sin firmar
+```http
+DELETE http://localhost:3000/api/albaranes/<id_del_albaran_sin_firmar>
+Cookie: token=<token_jwt_obtenido_en_el_login>
+```
+
+**Comprobar**: La respuesta debe indicar que el albarán ha sido cancelado correctamente. El albarán no se elimina físicamente, sino que cambia su estado a "cancelled".
+
+## Pruebas automatizadas
+
+El proyecto incluye pruebas automatizadas con Jest para verificar el correcto funcionamiento de los repositorios. Puedes ejecutarlas con los siguientes comandos:
+
+```bash
+# Ejecutar todas las pruebas
+npm test
+
+# Ejecutar pruebas específicas
+npm run test:clients    # Pruebas de clientes
+npm run test:projects   # Pruebas de proyectos
+npm run test:albaranes  # Pruebas de albaranes
+```
+
+## Documentación de la API
+
+La API está documentada con Swagger y puedes acceder a la documentación interactiva en:
+
+```
+http://localhost:3000/api-docs
+```
+
+Esta interfaz te permitirá probar todos los endpoints de la API desde el navegador.
+
+---
+
+## Nota sobre la estructura del proyecto
+
+El proyecto sigue una arquitectura basada en repositorios:
+
+- **models/**: Modelos de MongoDB/Mongoose
+- **repositories/**: Lógica de negocio
+- **views/**: Vistas EJS para las páginas web
+- **tests/**: Pruebas automatizadas
+- **config/**: Configuraciones
+- **pdfs/**: Directorio donde se almacenan los PDFs generados

@@ -1,341 +1,286 @@
-import fetch from 'node-fetch';
-import readline from 'readline';
-import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import Company from '../models/Company.js';
+import Client from '../models/Client.js';
+import Project from '../models/Project.js';
+import ProjectRepository from '../repositories/ProjectRepository.js';
+import connectDB from '../config/database.js';
 
-// Configurar variables de entorno
-dotenv.config();
-
-// Configurar readline para entrada por consola
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-// Función para preguntar al usuario
-const question = (prompt) => {
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      resolve(answer);
+describe('Projects API', () => {
+  let connection;
+  let testUser;
+  let testCompany;
+  let testClient;
+  let testProject;
+  
+  // Configuración antes de todas las pruebas
+  beforeAll(async () => {
+    // Conectar a la base de datos de prueba
+    connection = await connectDB();
+    
+    // Limpiar datos de prueba
+    await User.deleteMany({});
+    await Company.deleteMany({});
+    await Client.deleteMany({});
+    await Project.deleteMany({});
+    
+    // Crear usuario de prueba
+    testUser = new User({
+      email: 'test@example.com',
+      password: 'password123',
+      nombre: 'Test',
+      apellidos: 'User',
+      nif: 'TEST123',
+      direccion: 'Test Address',
+      isValidated: true
     });
+    await testUser.save();
+    
+    // Crear compañía de prueba
+    testCompany = new Company({
+      nif: 'B12345678',
+      nombre: 'Test Company',
+      miembros: [testUser.email],
+      jefe: testUser.email
+    });
+    await testCompany.save();
+    
+    // Crear cliente de prueba
+    testClient = new Client({
+      nombre: 'Test',
+      apellidos: 'Client',
+      email: 'client@example.com',
+      telefono: '123456789',
+      nif: 'CLIENT123',
+      direccion: 'Client Address',
+      creador: testUser.email,
+      compania: testCompany._id
+    });
+    await testClient.save();
   });
-};
-
-// URL base para las peticiones
-const BASE_URL = 'http://localhost:3000';
-
-// Variables para almacenar datos importantes entre pasos
-let userId = '';
-let userEmail = '';
-let userPassword = '';
-let jwtToken = '';
-let cookieJar = '';
-let clientId = '';
-let projectId = '';
-let companyId = '';
-
-// Función para manejar las cookies
-const saveCookies = (headers) => {
-  const cookies = headers.get('set-cookie');
-  if (cookies) {
-    cookieJar = cookies;
-    console.log('Cookies guardadas.');
-  }
-};
-
-// Función para hacer peticiones con cookies
-const fetchWithCookies = async (url, options = {}) => {
-  if (cookieJar) {
-    options.headers = {
-      ...options.headers,
-      'Cookie': cookieJar
+  
+  // Limpieza después de todas las pruebas
+  afterAll(async () => {
+    // Limpiar datos de prueba
+    await User.deleteMany({});
+    await Company.deleteMany({});
+    await Client.deleteMany({});
+    await Project.deleteMany({});
+    
+    // Cerrar conexión a base de datos
+    await mongoose.connection.close();
+  });
+  
+  // Prueba de creación de proyecto
+  test('Crear un proyecto', async () => {
+    const projectData = {
+      titulo: 'Test Project',
+      descripcion: 'Project Description',
+      fechaInicio: new Date(),
+      fechaFin: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días después
+      estado: 'En progreso',
+      presupuesto: 1000,
+      clienteId: testClient._id.toString(),
+      companiaId: testCompany._id.toString(),
+      creadorEmail: testUser.email
     };
-  }
-  return fetch(url, options);
-};
-
-// Función principal que ejecuta todos los pasos del test
-const runTest = async () => {
-  try {
-    console.log('====================================');
-    console.log('INICIANDO TEST DE PROYECTOS');
-    console.log('====================================\n');
     
-    // 1. Solicitar credenciales de usuario ya validado
-    console.log('\n1. CONFIGURACIÓN INICIAL');
-    console.log('------------------------------------');
-    userEmail = await question('Ingrese email de un usuario ya validado: ');
-    userPassword = await question('Ingrese contraseña del usuario: ');
+    const result = await ProjectRepository.create(projectData);
     
-    // 2. Iniciar sesión con el usuario
-    console.log('\n2. INICIANDO SESIÓN');
-    console.log('------------------------------------');
-    let response = await fetch(`${BASE_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: userEmail, password: userPassword })
-    });
+    // Guardar para usar en otras pruebas
+    testProject = result;
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al iniciar sesión: ${errorData.error || 'Error desconocido'}`);
-    }
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.titulo).toBe(projectData.titulo);
+    expect(result.descripcion).toBe(projectData.descripcion);
+    expect(result.estado).toBe(projectData.estado);
+    expect(result.presupuesto).toBe(projectData.presupuesto);
+    expect(result.cliente.toString()).toBe(projectData.clienteId);
+    expect(result.compania.toString()).toBe(projectData.companiaId);
+    expect(result.creador).toBe(projectData.creadorEmail);
+    expect(result.activo).toBe(true);
+  });
+  
+  // Prueba para obtener todos los proyectos
+  test('Obtener todos los proyectos', async () => {
+    const result = await ProjectRepository.getAll();
     
-    // Guardar las cookies (contienen el token JWT)
-    saveCookies(response.headers);
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(1); // Al menos el que hemos creado
+  });
+  
+  // Prueba para obtener proyecto por ID
+  test('Obtener proyecto por ID', async () => {
+    const result = await ProjectRepository.getById(testProject._id);
     
-    let data = await response.json();
-    console.log('✅ Sesión iniciada correctamente');
-    console.log(`Usuario: ${data.user.nombre} ${data.user.apellidos}`);
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.titulo).toBe(testProject.titulo);
+    expect(result.descripcion).toBe(testProject.descripcion);
+    expect(result.creador).toBe(testProject.creador);
+  });
+  
+  // Prueba para obtener proyectos por creador
+  test('Obtener proyectos por creador', async () => {
+    const result = await ProjectRepository.getByCreador(testUser.email);
     
-    jwtToken = data.token;
-    userId = data.user._id;
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result.every(project => project.creador === testUser.email)).toBe(true);
+  });
+  
+  // Prueba para obtener proyectos por cliente
+  test('Obtener proyectos por cliente', async () => {
+    const result = await ProjectRepository.getByCliente(testClient._id);
     
-    // 3. Obtener clientes disponibles para asignar al proyecto
-    console.log('\n3. OBTENIENDO CLIENTES DISPONIBLES');
-    console.log('------------------------------------');
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result.every(project => 
+      project.cliente._id.toString() === testClient._id.toString() ||
+      project.cliente.toString() === testClient._id.toString()
+    )).toBe(true);
+  });
+  
+  // Prueba para obtener proyectos por compañía
+  test('Obtener proyectos por compañía', async () => {
+    const result = await ProjectRepository.getByCompania(testCompany._id);
     
-    try {
-      response = await fetchWithCookies(`${BASE_URL}/api/clients`);
-      if (response.ok) {
-        data = await response.json();
-        if (data && data.length > 0) {
-          console.log('✅ Clientes disponibles:');
-          data.forEach((client, index) => {
-            console.log(`${index + 1}. ${client.nombre} ${client.apellidos} (${client.email}) - ID: ${client._id}`);
-          });
-          
-          const clientIndex = await question('Seleccione el número del cliente a usar: ');
-          if (clientIndex > 0 && clientIndex <= data.length) {
-            clientId = data[clientIndex - 1]._id;
-            console.log(`✅ Cliente seleccionado: ${data[clientIndex - 1].nombre} ${data[clientIndex - 1].apellidos}`);
-          } else {
-            throw new Error('No se seleccionó ningún cliente válido');
-          }
-        } else {
-          throw new Error('No se encontraron clientes disponibles');
-        }
-      } else {
-        throw new Error('No se pudo acceder a los clientes');
-      }
-    } catch (error) {
-      console.log('❌ Error al obtener clientes:', error.message);
-      throw new Error('Se requiere al menos un cliente para crear un proyecto');
-    }
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result.every(project => 
+      project.compania._id.toString() === testCompany._id.toString() ||
+      project.compania.toString() === testCompany._id.toString()
+    )).toBe(true);
+  });
+  
+  // Prueba para actualizar un proyecto
+  test('Actualizar un proyecto', async () => {
+    const updateData = {
+      titulo: 'Updated Project',
+      estado: 'Completado',
+      presupuesto: 1500
+    };
     
-    // 4. Verificar si hay compañías disponibles
-    console.log('\n4. COMPROBANDO COMPAÑÍAS DISPONIBLES');
-    console.log('------------------------------------');
+    const result = await ProjectRepository.update(
+      testProject._id,
+      updateData,
+      testUser.email
+    );
     
-    try {
-      response = await fetchWithCookies(`${BASE_URL}/api/companies`);
-      if (response.ok) {
-        data = await response.json();
-        if (data && data.length > 0) {
-          console.log('✅ Compañías encontradas:');
-          data.forEach((company, index) => {
-            console.log(`${index + 1}. ${company.nombre} (${company.nif}) - ID: ${company._id}`);
-          });
-          
-          const companyIndex = await question('Seleccione el número de la compañía a usar (o 0 para ninguna): ');
-          if (companyIndex > 0 && companyIndex <= data.length) {
-            companyId = data[companyIndex - 1]._id;
-            console.log(`✅ Compañía seleccionada: ${data[companyIndex - 1].nombre}`);
-          } else {
-            console.log('❌ No se seleccionó ninguna compañía');
-            companyId = '';
-          }
-        } else {
-          console.log('❌ No se encontraron compañías');
-        }
-      } else {
-        console.log('❌ No se pudo acceder a las compañías');
-      }
-    } catch (error) {
-      console.log('❌ Error al obtener compañías:', error.message);
-    }
-    
-    // 5. Crear un nuevo proyecto
-    console.log('\n5. CREANDO NUEVO PROYECTO');
-    console.log('------------------------------------');
-    
-    const timestamp = Date.now();
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.titulo).toBe(updateData.titulo);
+    expect(result.estado).toBe(updateData.estado);
+    expect(result.presupuesto).toBe(updateData.presupuesto);
+    // Verificar que otros campos no han cambiado
+    expect(result.descripcion).toBe(testProject.descripcion);
+    expect(result.cliente.toString()).toBe(testProject.cliente.toString());
+    expect(result.compania.toString()).toBe(testProject.compania.toString());
+  });
+  
+  // Prueba para verificar validación de fechas
+  test('No permite fechaInicio después de fechaFin', async () => {
     const fechaInicio = new Date();
-    const fechaFin = new Date();
-    fechaFin.setMonth(fechaFin.getMonth() + 1); // Un mes después
+    const fechaFin = new Date(Date.now() - 24 * 60 * 60 * 1000); // 1 día antes (inválido)
     
     const projectData = {
-      titulo: `Proyecto de prueba ${timestamp}`,
-      descripcion: `Descripción de prueba para el proyecto creado en el test con timestamp ${timestamp}`,
-      fechaInicio: fechaInicio.toISOString(),
-      fechaFin: fechaFin.toISOString(),
+      titulo: 'Invalid Project',
+      descripcion: 'Invalid dates',
+      fechaInicio: fechaInicio,
+      fechaFin: fechaFin,
       estado: 'Pendiente',
-      presupuesto: Math.floor(Math.random() * 10000) + 1000, // Presupuesto aleatorio entre 1000 y 11000
-      clienteId: clientId,
-      companiaId: companyId || undefined
+      presupuesto: 1000,
+      clienteId: testClient._id.toString(),
+      creadorEmail: testUser.email
     };
     
-    console.log('Datos del proyecto a crear:');
-    console.log(JSON.stringify(projectData, null, 2));
+    await expect(
+      ProjectRepository.create(projectData)
+    ).rejects.toThrow('La fecha de inicio debe ser anterior a la fecha de fin');
+  });
+  
+  // Prueba para eliminar (desactivar) un proyecto
+  test('Eliminar un proyecto', async () => {
+    const result = await ProjectRepository.delete(
+      testProject._id,
+      testUser.email
+    );
     
-    response = await fetchWithCookies(`${BASE_URL}/api/projects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(projectData)
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    
+    // Verificar que está marcado como inactivo
+    const inactiveProject = await Project.findById(testProject._id);
+    expect(inactiveProject).toBeDefined();
+    expect(inactiveProject.activo).toBe(false);
+  });
+  
+  // Prueba para verificar que proyectos inactivos no aparecen en getAll
+  test('Los proyectos inactivos no aparecen en getAll', async () => {
+    const result = await ProjectRepository.getAll();
+    
+    // Verificar que el proyecto eliminado no aparece
+    expect(result.find(project => 
+      project._id.toString() === testProject._id.toString()
+    )).toBeUndefined();
+  });
+  
+  // Prueba para verificar acceso por compañía
+  test('Usuario de la misma compañía puede actualizar proyecto', async () => {
+    // Crear un nuevo usuario en la misma compañía
+    const companyUser = new User({
+      email: 'company@example.com',
+      password: 'password123',
+      nombre: 'Company',
+      apellidos: 'User',
+      nif: 'COMPANY123',
+      direccion: 'Company Address',
+      isValidated: true
     });
+    await companyUser.save();
     
-    if (!response.ok) {
-      try {
-        const errorData = await response.json();
-        throw new Error(`Error al crear proyecto: ${errorData.error || 'Error desconocido'}`);
-      } catch (e) {
-        // Si no se puede analizar como JSON, obtener el texto
-        const errorText = await response.text();
-        throw new Error(`Error al crear proyecto. Respuesta: ${errorText.substring(0, 100)}...`);
-      }
-    }
+    // Añadir usuario a la compañía
+    testCompany.miembros.push(companyUser.email);
+    await testCompany.save();
     
-    data = await response.json();
-    projectId = data._id;
+    // Crear un nuevo proyecto
+    const projectData = {
+      titulo: 'Company Project',
+      descripcion: 'Project for company access test',
+      fechaInicio: new Date(),
+      fechaFin: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      estado: 'Pendiente',
+      presupuesto: 2000,
+      clienteId: testClient._id.toString(),
+      companiaId: testCompany._id.toString(),
+      creadorEmail: testUser.email
+    };
     
-    console.log('✅ Proyecto creado correctamente');
-    console.log(`ID del proyecto: ${projectId}`);
+    const newProject = await ProjectRepository.create(projectData);
     
-    // 6. Obtener todos los proyectos
-    console.log('\n6. OBTENIENDO LISTA DE PROYECTOS');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/projects`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener proyectos: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log(`✅ Se encontraron ${data.length} proyectos`);
-    
-    // 7. Obtener detalles del proyecto creado
-    console.log('\n7. OBTENIENDO DETALLES DEL PROYECTO CREADO');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/projects/${projectId}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener detalles del proyecto: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log('✅ Detalles del proyecto:');
-    console.log(JSON.stringify(data, null, 2));
-    
-    // 8. Actualizar el proyecto
-    console.log('\n8. ACTUALIZANDO DATOS DEL PROYECTO');
-    console.log('------------------------------------');
-    
+    // Actualizar el proyecto con el usuario de la compañía
     const updateData = {
-      titulo: `Proyecto actualizado ${timestamp}`,
-      estado: 'En progreso',
-      presupuesto: Math.floor(Math.random() * 10000) + 1000 // Nuevo presupuesto aleatorio
+      titulo: 'Updated by Company User'
     };
     
-    console.log('Datos a actualizar:');
-    console.log(JSON.stringify(updateData, null, 2));
+    const result = await ProjectRepository.update(
+      newProject._id,
+      updateData,
+      companyUser.email
+    );
     
-    response = await fetchWithCookies(`${BASE_URL}/api/projects/${projectId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al actualizar proyecto: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log('✅ Proyecto actualizado correctamente');
-    console.log(JSON.stringify(data, null, 2));
-    
-    // 9. Verificar que solo vemos nuestros proyectos
-    console.log('\n9. VERIFICANDO PROYECTOS CREADOS POR EL USUARIO');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/projects/me`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener proyectos del usuario: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log(`✅ Proyectos creados por el usuario actual: ${data.length}`);
-    
-    // 10. Verificar proyectos del cliente
-    console.log('\n10. VERIFICANDO PROYECTOS DEL CLIENTE');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/api/projects/client/${clientId}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al obtener proyectos del cliente: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log(`✅ Proyectos asociados al cliente: ${data.length}`);
-    
-    // 11. Eliminar el proyecto creado
-    console.log('\n11. ELIMINANDO PROYECTO');
-    console.log('------------------------------------');
-    
-    const confirmarEliminacion = await question('¿Desea eliminar el proyecto creado? (s/n): ');
-    
-    if (confirmarEliminacion.toLowerCase() === 's') {
-      response = await fetchWithCookies(`${BASE_URL}/api/projects/${projectId}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Error al eliminar proyecto: ${errorData.error || 'Error desconocido'}`);
-      }
-      
-      data = await response.json();
-      console.log('✅ Proyecto eliminado correctamente');
-      console.log(data);
-    } else {
-      console.log('❌ Eliminación cancelada por el usuario');
-    }
-    
-    // 12. Cerrar sesión
-    console.log('\n12. CERRANDO SESIÓN');
-    console.log('------------------------------------');
-    
-    response = await fetchWithCookies(`${BASE_URL}/logout`, {
-      method: 'POST'
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Error al cerrar sesión: ${errorData.error || 'Error desconocido'}`);
-    }
-    
-    data = await response.json();
-    console.log('✅ Sesión cerrada correctamente');
-    
-    console.log('\n====================================');
-    console.log('¡TEST DE PROYECTOS COMPLETADO CON ÉXITO!');
-    console.log('====================================');
-    
-  } catch (error) {
-    console.error('\n❌ ERROR DURANTE EL TEST:', error.message);
-  } finally {
-    rl.close();
-  }
-};
-
-// Ejecutar el test
-runTest();
-
-
+    // Verificaciones
+    expect(result).toBeDefined();
+    expect(result.titulo).toBe(updateData.titulo);
+  });
+});

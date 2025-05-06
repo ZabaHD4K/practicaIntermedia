@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 
-
 const hoursEntrySchema = new mongoose.Schema({
   user: {
     type: String,
@@ -21,7 +20,6 @@ const hoursEntrySchema = new mongoose.Schema({
     default: Date.now
   }
 });
-
 
 const materialEntrySchema = new mongoose.Schema({
   name: {
@@ -47,7 +45,6 @@ const materialEntrySchema = new mongoose.Schema({
     type: String
   }
 });
-
 
 const albaranSchema = new mongoose.Schema({
   number: {
@@ -102,30 +99,33 @@ const albaranSchema = new mongoose.Schema({
     type: String
   },
   signatureImage: {
-    type: String 
+    type: String // URL o base64 de la imagen de firma
   },
   status: {
     type: String,
     enum: ['draft', 'pending', 'signed', 'cancelled'],
     default: 'draft'
+  },
+  pdfUrl: {
+    type: String // URL donde se almacena el PDF generado
   }
 }, { timestamps: true });
 
-
+// Middleware pre-save para calcular totales
 albaranSchema.pre('save', function(next) {
-  
+  // Calcular total de horas
   this.totalHours = this.hoursEntries.reduce((sum, entry) => sum + entry.hours, 0);
   
-  
+  // Calcular total de materiales
   this.totalMaterials = this.materialEntries.reduce((sum, entry) => sum + entry.totalPrice, 0);
   
-  
+  // Calcular importe total (por ahora solo materiales, se podría añadir precio/hora)
   this.totalAmount = this.totalMaterials; 
   
   next();
 });
 
-
+// Método estático para generar número de albarán
 albaranSchema.statics.generateNumber = async function() {
   const count = await this.countDocuments();
   const year = new Date().getFullYear();

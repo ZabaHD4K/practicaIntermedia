@@ -13,6 +13,24 @@ async function createCompany(emailJefe, nif, nombre, miembros) {
   if (!jefe) {
     throw new Error('El jefe con el correo proporcionado no existe.');
   }
+  
+  // Verificar si el jefe está validado
+  if (!jefe.isValidated) {
+    throw new Error('El jefe debe validar su cuenta antes de crear una compañía.');
+  }
+
+  // Verificar que todos los miembros existan y estén validados
+  if (miembros && miembros.length > 0) {
+    for (const miembroEmail of miembros) {
+      const miembro = await User.findOne({ email: miembroEmail });
+      if (!miembro) {
+        throw new Error(`El miembro con el correo ${miembroEmail} no existe.`);
+      }
+      if (!miembro.isValidated) {
+        throw new Error(`El miembro con el correo ${miembroEmail} debe validar su cuenta.`);
+      }
+    }
+  }
 
   // Crear la nueva compañía
   const newCompany = new Company({
